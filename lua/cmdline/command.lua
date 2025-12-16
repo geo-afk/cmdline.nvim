@@ -80,10 +80,12 @@ function M:execute_cmdline(cmd, context)
 	if ok then
 		return true, nil
 	else
-		-- Extract meaningful error message
-		local err_msg = tostring(result)
-		-- Clean up the error message (remove Vim error codes if present)
-		err_msg = err_msg:gsub("^Vim%(.-%):", ""):gsub("^E%d+:%s*", "")
+		local err_msg = tostring(result):gsub("^Vim%(.-%):", ""):gsub("^E%d+:%s*", "")
+
+		-- FIX: Use reliable message system
+		vim.schedule(function()
+			require("cmdline.messages").show(err_msg, "error")
+		end)
 		return false, err_msg
 	end
 end

@@ -219,8 +219,13 @@ end
 
 ---Handle backspace
 function M:handle_backspace()
+	-- FIX: Only push undo if deletion succeeds
+	local before = State.text
 	if State:delete_char() then
-		State:push_undo()
+		-- Only push if text actually changed
+		if before ~= State.text then
+			State:push_undo()
+		end
 		UI:render()
 		Completion:trigger()
 	end

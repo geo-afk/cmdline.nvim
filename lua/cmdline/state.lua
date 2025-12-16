@@ -230,10 +230,18 @@ end
 ---Insert text at cursor position
 ---@param str string
 function M:insert_text(str)
+	-- FIX: Ensure cursor_pos stays in bounds
+	self.cursor_pos = math.max(1, math.min(self.cursor_pos, #self.text + 1))
+
 	local before = self.text:sub(1, self.cursor_pos - 1)
 	local after = self.text:sub(self.cursor_pos)
 	self.text = before .. str .. after
 	self.cursor_pos = self.cursor_pos + #str
+
+	-- DEBUG: Remove after fixing
+	vim.schedule(function()
+		print(string.format("INSERT: '%s' cursor=%d", self.text, self.cursor_pos))
+	end)
 end
 
 ---Delete character before cursor
@@ -243,10 +251,17 @@ function M:delete_char()
 		return false
 	end
 
+	-- FIX: Correct string slicing
 	local before = self.text:sub(1, self.cursor_pos - 2)
 	local after = self.text:sub(self.cursor_pos)
 	self.text = before .. after
 	self.cursor_pos = self.cursor_pos - 1
+
+	-- DEBUG: Remove after fixing
+	vim.schedule(function()
+		print(string.format("DELETE: '%s' cursor=%d", self.text, self.cursor_pos))
+	end)
+
 	return true
 end
 

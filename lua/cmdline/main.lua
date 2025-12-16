@@ -72,6 +72,15 @@ function M.setup_keymaps()
 		end, { desc = "Modern cmdline: " .. mode })
 	end
 
+	-- FIX: Add direct quit commands
+	vim.keymap.set("n", "q", function()
+		if vim.bo.buftype == "" and not vim.bo.modified then
+			vim.cmd("quit")
+		else
+			return "q" -- Let normal q work (macros, etc)
+		end
+	end, { expr = true, desc = "Smart quit" })
+
 	-- Visual mode range support
 	vim.keymap.set("v", ":", function()
 		M.open(":")
