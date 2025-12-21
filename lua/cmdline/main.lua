@@ -1,7 +1,3 @@
--- lua/cmdline/init.lua
--- Modern Neovim Command Line Plugin - Complete Rewrite
--- Fixes: proper cmdline mode, message handling, quit command issues
-
 local M = {}
 
 -- Module state
@@ -73,7 +69,8 @@ local defaults = {
 	},
 }
 
--- Setup highlights
+--- Setup highlights for the command line UI.
+-- This function defines various highlight groups used in the UI based on the theme configuration.
 local function setup_highlights()
 	local t = M.config.theme
 	vim.api.nvim_set_hl(0, "CmdlineNormal", { bg = t.bg, fg = t.fg })
@@ -84,7 +81,9 @@ local function setup_highlights()
 	vim.api.nvim_set_hl(0, "CmdlineHint", { fg = t.hint_fg, italic = true })
 end
 
--- Get mode icon
+--- Get the icon for the current mode.
+-- @param mode string The current mode (e.g., ":", "/", "?", "=").
+-- @return string The icon corresponding to the mode.
 local function get_icon(mode)
 	local icons = M.config.icons
 	if mode == ":" then
@@ -100,7 +99,8 @@ local function get_icon(mode)
 	end
 end
 
--- Calculate window layout
+--- Calculate the layout for the floating window.
+-- @return table The layout options for nvim_open_win.
 local function calculate_layout()
 	local ui_width = vim.o.columns
 	local ui_height = vim.o.lines
@@ -134,7 +134,8 @@ local function calculate_layout()
 	}
 end
 
--- Get history for mode
+--- Get the history for the current mode.
+-- @return table A list of history items.
 local function get_history()
 	local hist_type = M.state.mode == ":" and "cmd" or "search"
 	local history = {}
@@ -149,7 +150,8 @@ local function get_history()
 	return history
 end
 
--- Get completions
+--- Get completion items based on the current mode and text.
+-- @return table A list of completion items.
 local function get_completions()
 	if not M.config.completion.enabled then
 		return {}
@@ -199,7 +201,9 @@ local function get_completions()
 	return items
 end
 
--- Render UI
+--- Render the UI content in the buffer.
+-- This function builds the lines for the prompt, separator, and completions,
+-- applies highlights, and resizes the window accordingly.
 local function render()
 	if not M.state.buf or not vim.api.nvim_buf_is_valid(M.state.buf) then
 		return
@@ -248,7 +252,8 @@ local function render()
 
 	-- Completions
 	if #M.state.completions > 0 then
-		table.insert(lines, string.rep("─", 80))
+		local width = vim.api.nvim_win_get_width(M.state.win)
+		table.insert(lines, string.rep("─", width))
 
 		for i, item in ipairs(M.state.completions) do
 			local selected = i == M.state.completion_idx
@@ -292,7 +297,8 @@ local function render()
 	end
 end
 
--- Trigger completions (debounced)
+--- Trigger completions with debounce.
+-- This function schedules completion fetching after a delay.
 local completion_timer = nil
 local function trigger_completions()
 	if not M.config.completion.auto_trigger then
@@ -322,7 +328,8 @@ local function trigger_completions()
 	)
 end
 
--- Input handlers
+--- Insert a character at the cursor position.
+-- @param char string The character to insert.
 local function insert_char(char)
 	local before = M.state.text:sub(1, M.state.cursor_pos - 1)
 	local after = M.state.text:sub(M.state.cursor_pos)
@@ -332,6 +339,7 @@ local function insert_char(char)
 	trigger_completions()
 end
 
+--- Delete the character before the cursor.
 local function delete_char()
 	if M.state.cursor_pos <= 1 then
 		return
@@ -344,6 +352,7 @@ local function delete_char()
 	trigger_completions()
 end
 
+--- Delete the word before the cursor.
 local function delete_word()
 	if M.state.cursor_pos <= 1 then
 		return
@@ -356,6 +365,7 @@ local function delete_word()
 	trigger_completions()
 end
 
+--- Delete the entire line.
 local function delete_line()
 	M.state.text = ""
 	M.state.cursor_pos = 1
@@ -364,6 +374,8 @@ local function delete_line()
 	render()
 end
 
+--- Move the cursor in the specified direction.
+-- @param direction string One of "left", "right", "home", "end".
 local function move_cursor(direction)
 	if direction == "left" then
 		M.state.cursor_pos = math.max(1, M.state.cursor_pos - 1)
@@ -377,6 +389,8 @@ local function move_cursor(direction)
 	render()
 end
 
+--- Navigate through history.
+-- @param direction string "prev" or "next".
 local function navigate_history(direction)
 	local history = get_history()
 	if #history == 0 then
@@ -401,6 +415,8 @@ local function navigate_history(direction)
 	render()
 end
 
+--- Navigate through completions.
+-- @param direction string "next" or "prev".
 local function navigate_completions(direction)
 	if #M.state.completions == 0 then
 		return
@@ -417,6 +433,7 @@ local function navigate_completions(direction)
 	render()
 end
 
+--- Select the current completion item.
 local function select_completion()
 	if M.state.completion_idx == 0 or M.state.completion_idx > #M.state.completions then
 		return
@@ -432,7 +449,7 @@ local function select_completion()
 	render()
 end
 
--- Setup buffer keymaps
+--- Setup keymaps for the buffer.
 local function setup_keymaps()
 	local buf = M.state.buf
 	local opts = { buffer = buf, noremap = true, silent = true }
@@ -521,7 +538,7 @@ local function setup_keymaps()
 	end
 end
 
--- Execute command
+--- Execute the entered command or search.
 function M.execute()
 	if not M.state.active then
 		return
@@ -596,7 +613,8 @@ function M.execute()
 	end)
 end
 
--- Open cmdline
+--- Open the command line in the specified mode.
+-- @param mode string|nil The mode to open (default ":").
 function M.open(mode)
 	if M.state.active then
 		return
@@ -659,7 +677,7 @@ function M.open(mode)
 	end
 end
 
--- Close cmdline
+--- Close the command line.
 function M.close()
 	if not M.state.active then
 		return
@@ -701,7 +719,9 @@ function M.close()
 	vim.cmd("stopinsert")
 end
 
--- Setup function
+--- Setup the module with configuration.
+-- @param opts table|nil User configuration to override defaults.
+-- @return table The module table.
 function M.setup(opts)
 	-- Merge config
 	M.config = vim.tbl_deep_extend("force", defaults, opts or {})
