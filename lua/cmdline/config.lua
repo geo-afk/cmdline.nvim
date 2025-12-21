@@ -1,29 +1,28 @@
--- config.lua
 local M = {}
 
 M.defaults = {
 	-- Window configuration
 	window = {
 		relative = "editor",
-		position = "center", -- Changed to "center" for a more modern, floating popup feel like Noice.nvim
-		width = 0.8, -- Increased width for better readability
-		height = 1, -- initial height (grows with completions)
-		max_height = 15, -- Slightly increased for more completions
-		border = "rounded", -- "none", "single", "double", "rounded", "solid", "shadow"
+		position = "center", -- Modern floating popup like Noice.nvim
+		width = 0.8,
+		height = 1,
+		max_height = 15,
+		border = "rounded",
 		zindex = 50,
 		title = " Command ",
 		title_pos = "center",
-		blend = 10, -- Added slight transparency for a nicer, modern look
+		blend = 10, -- Subtle transparency for modern look
 	},
 
-	-- Animation settings (added based on animation.lua usage for smoother UI transitions)
+	-- Animation settings for smoother UI transitions
 	animation = {
 		enabled = true,
-		duration = 200, -- ms for fade/slide animations
-		slide_distance = 10, -- Distance for slide-in animation
+		duration = 200, -- milliseconds
+		slide_distance = 10,
 	},
 
-	-- Theme and colors (kept Catppuccin Mocha-inspired, but can be adjusted; it's popular and nice)
+	-- Theme - Catppuccin Mocha inspired (popular modern theme)
 	theme = {
 		-- Background and foreground
 		bg = "#1e1e2e",
@@ -62,61 +61,78 @@ M.defaults = {
 		success_fg = "#a6e3a1",
 	},
 
-	-- Icons (Nerd Font required) - Updated to match Noice.nvim defaults where possible for consistency and nice look
+	-- Icons (Nerd Font required) - Based on Noice.nvim and modern standards
 	icons = {
-		cmdline = " ",
-		search = "  ",
-		search_up = "  ",
+		-- Mode icons
+		cmdline = " ",
+		search = " ",
+		search_up = " ",
 		filter = "$ ",
-		lua = " ",
-		help = " ",
+		lua = " ",
+		help = "󰋖 ",
 
-		-- Completion kinds
-		Command = "󰘳 ",
+		-- Completion kinds (based on LSP specification and lspkind.nvim)
+		Command = " ",
 		Function = "󰊕 ",
-		Variable = "󰫧 ",
+		Variable = "󰀫 ",
 		Action = "󰜎 ",
 		History = "󰋚 ",
-		File = "󰈔 ",
+		File = "󰈙 ",
 		Buffer = "󰈙 ",
 		Word = "󰊄 ",
 		Help = "󰋖 ",
 
-		-- LSP kinds
-		Module = "󰕳 ",
+		-- LSP kinds (VS Code-style from lspkind.nvim)
+		Text = "󰉿 ",
+		Method = "󰆧 ",
+		Module = " ",
 		Class = "󰠱 ",
-		Method = "󰊕 ",
 		Property = "󰜢 ",
 		Field = "󰜢 ",
-		Constructor = "󰆧 ",
-		Enum = "󰕘 ",
-		Interface = "󰜰 ",
+		Constructor = " ",
+		Enum = " ",
+		Interface = " ",
 		Keyword = "󰌋 ",
-		Snippet = "󰩫 ",
+		Snippet = " ",
 		Color = "󰏘 ",
 		Reference = "󰈇 ",
 		Folder = "󰉋 ",
-		Event = "󰉁 ",
+		EnumMember = " ",
+		Constant = "󰏿 ",
+		Struct = "󰙅 ",
+		Event = " ",
 		Operator = "󰆕 ",
-		TypeParameter = "󰊄 ",
+		TypeParameter = " ",
+		Unit = "󰑭 ",
+		Value = "󰎠 ",
 
 		-- Git kinds
-		Modified = "󰏫 ",
-		Added = "󰐕 ",
-		Deleted = "󰍴 ",
-		Untracked = "󰎔 ",
+		Modified = " ",
+		Added = " ",
+		Deleted = " ",
+		Untracked = " ",
+		Renamed = "󰁕 ",
+		Ignored = " ",
 
 		-- UI elements
-		selected = "󰄵 ",
-		item = "󰄱 ",
+		selected = " ",
+		item = " ",
 		separator = "─",
-		more = "󰊐 ",
+		more = "󰇘 ",
+		ellipsis = "… ",
+		loading = " ",
+		error = " ",
+		warning = " ",
+		info = " ",
+		hint = "󰌶 ",
+		success = " ",
 	},
+
 	-- Completion settings
 	completion = {
 		enabled = true,
 		auto_trigger = true,
-		trigger_delay = 50, -- ms
+		trigger_delay = 50, -- milliseconds
 		fuzzy = true,
 		max_items = 40,
 		max_items_per_group = 8,
@@ -125,10 +141,10 @@ M.defaults = {
 		auto_select = false,
 
 		-- Smart completion features
-		smart_enabled = true, -- Enable context-aware completions
-		lsp_enabled = true, -- Query LSP for symbols
-		telescope_enabled = true, -- Use Telescope for enhanced picking
-		treesitter_enabled = true, -- Use Tree-sitter for parsing
+		smart_enabled = true,
+		lsp_enabled = true,
+		telescope_enabled = true,
+		treesitter_enabled = true,
 
 		-- Sources in priority order
 		sources = {
@@ -150,11 +166,11 @@ M.defaults = {
 		undo_redo = true,
 		history_nav = true,
 		inline_hints = true,
-		syntax_validation = true, -- Validate syntax with Tree-sitter
-		telescope_picker = true, -- Show Telescope picker on <C-Space>
+		syntax_validation = true,
+		telescope_picker = true,
 	},
 
-	-- Custom keymaps (set to false to disable specific bindings)
+	-- Custom keymaps
 	keymaps = {
 		-- Editing
 		backspace = "<BS>",
@@ -175,7 +191,7 @@ M.defaults = {
 		complete_next = "<Tab>",
 		complete_prev = "<S-Tab>",
 		complete_select = "<CR>",
-		telescope_picker = "<C-1>", -- Show Telescope enhanced picker
+		telescope_picker = "<C-Space>", -- Show Telescope enhanced picker
 
 		-- Undo/Redo
 		undo = "<C-z>",
@@ -192,7 +208,7 @@ M.defaults = {
 	-- LSP integration settings
 	lsp = {
 		enabled = true,
-		symbol_kinds = { -- Which LSP symbol kinds to include
+		symbol_kinds = {
 			"Function",
 			"Method",
 			"Variable",
@@ -209,7 +225,7 @@ M.defaults = {
 			"Operator",
 			"TypeParameter",
 		},
-		debounce_ms = 100, -- Debounce LSP requests
+		debounce_ms = 100,
 	},
 
 	-- Telescope integration settings
