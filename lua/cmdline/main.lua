@@ -1,3 +1,7 @@
+-- lua/cmdline/init.lua
+-- Modern Neovim Command Line Plugin - Complete Rewrite
+-- Fixes: proper cmdline mode, message handling, quit command issues
+
 local M = {}
 
 -- Module state
@@ -32,9 +36,9 @@ local defaults = {
 	},
 	icons = {
 		cmdline = "❯ ",
-		search = "󰍉 ",
-		search_up = "󰍈 ",
-		lua = " ",
+		search = " ",
+		search_up = " ",
+		lua = " ",
 	},
 	theme = {
 		bg = "#1e1e2e",
