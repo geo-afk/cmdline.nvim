@@ -1,3 +1,4 @@
+-- main.lua - Enhanced with modern UI patterns from Noice.nvim
 local M = {}
 
 -- Module state
@@ -18,33 +19,43 @@ M.state = {
 	history_idx = 0,
 }
 
--- Default configuration
+-- Default configuration with modern UI defaults
 local defaults = {
 	window = {
 		relative = "editor",
-		position = "bottom",
-		width = 0.6,
+		position = "center", -- Modern centered floating window
+		width = 0.7, -- Wider for better readability
 		height = 1,
 		max_height = 15,
 		border = "rounded",
 		zindex = 50,
-		blend = 0,
+		blend = 15, -- Subtle transparency
+		title = " Command ",
+		title_pos = "center",
 	},
 	icons = {
-		cmdline = "❯ ",
+		cmdline = "󰘳 ",
 		search = "󰍉 ",
-		search_up = "󰍈 ",
-		lua = " ",
+		search_up = "󰍞 ",
+		lua = "󰢱 ",
+		filter = "$ ",
+		help = "󰋖 ",
 	},
 	theme = {
+		-- Catppuccin Mocha inspired
 		bg = "#1e1e2e",
 		fg = "#cdd6f4",
 		border_fg = "#89b4fa",
 		prompt_fg = "#89b4fa",
+		prompt_icon_fg = "#f9e2af",
 		cursor_bg = "#f38ba8",
 		cursor_fg = "#1e1e2e",
 		selection_bg = "#45475a",
+		selection_fg = "#cdd6f4",
 		hint_fg = "#6c7086",
+		separator_fg = "#45475a",
+		item_kind_fg = "#89b4fa",
+		item_desc_fg = "#6c7086",
 	},
 	completion = {
 		enabled = true,
@@ -69,14 +80,32 @@ local defaults = {
 	},
 }
 
--- Setup highlights
+-- Setup highlights with modern styling
 local function setup_highlights()
 	local t = M.config.theme
+
+	-- Main window highlights
 	vim.api.nvim_set_hl(0, "CmdlineNormal", { bg = t.bg, fg = t.fg })
-	vim.api.nvim_set_hl(0, "CmdlineBorder", { fg = t.border_fg })
-	vim.api.nvim_set_hl(0, "CmdlinePrompt", { fg = t.prompt_fg, bold = true })
-	vim.api.nvim_set_hl(0, "CmdlineCursor", { bg = t.cursor_bg, fg = t.cursor_fg })
-	vim.api.nvim_set_hl(0, "CmdlineSelection", { bg = t.selection_bg, bold = true })
+	vim.api.nvim_set_hl(0, "CmdlineBorder", { fg = t.border_fg, bold = true })
+
+	-- Prompt highlights
+	vim.api.nvim_set_hl(0, "CmdlinePrompt", { fg = t.prompt_fg })
+	vim.api.nvim_set_hl(0, "CmdlinePromptIcon", { fg = t.prompt_icon_fg, bold = true })
+
+	-- Cursor with subtle animation feel
+	vim.api.nvim_set_hl(0, "CmdlineCursor", { bg = t.cursor_bg, fg = t.cursor_fg, bold = true })
+
+	-- Selection with better contrast
+	vim.api.nvim_set_hl(0, "CmdlineSelection", { bg = t.selection_bg, fg = t.selection_fg, bold = true })
+
+	-- Completion items
+	vim.api.nvim_set_hl(0, "CmdlineItemKind", { fg = t.item_kind_fg })
+	vim.api.nvim_set_hl(0, "CmdlineItemDesc", { fg = t.item_desc_fg, italic = true })
+
+	-- Separator
+	vim.api.nvim_set_hl(0, "CmdlineSeparator", { fg = t.separator_fg })
+
+	-- Hints
 	vim.api.nvim_set_hl(0, "CmdlineHint", { fg = t.hint_fg, italic = true })
 end
 
@@ -96,27 +125,30 @@ local function get_icon(mode)
 	end
 end
 
--- Calculate window layout
+-- Calculate window layout with modern positioning
 local function calculate_layout()
 	local ui_width = vim.o.columns
 	local ui_height = vim.o.lines
 	local cfg = M.config.window
 
+	-- Calculate width (responsive)
 	local width = type(cfg.width) == "number" and cfg.width < 1 and math.floor(ui_width * cfg.width) or cfg.width
-	width = math.max(20, math.min(width, ui_width - 4))
+	width = math.max(40, math.min(width, ui_width - 4))
 
 	local height = cfg.height
-	local row
 
+	-- Position based on config
+	local row, col
 	if cfg.position == "top" then
-		row = 1
+		row = 2 -- Slight padding from top
+		col = math.floor((ui_width - width) / 2)
 	elseif cfg.position == "bottom" then
-		row = ui_height - height - 2
-	else
-		row = math.floor((ui_height - height) / 2)
+		row = ui_height - height - 3 -- Padding from bottom
+		col = math.floor((ui_width - width) / 2)
+	else -- center
+		row = math.floor((ui_height - height) / 2.5) -- Slightly higher than dead center
+		col = math.floor((ui_width - width) / 2)
 	end
-
-	local col = math.floor((ui_width - width) / 2)
 
 	return {
 		relative = cfg.relative,
@@ -127,6 +159,8 @@ local function calculate_layout()
 		style = "minimal",
 		border = cfg.border,
 		zindex = cfg.zindex,
+		title = cfg.title,
+		title_pos = cfg.title_pos,
 	}
 end
 
@@ -145,7 +179,7 @@ local function get_history()
 	return history
 end
 
--- Get completions
+-- Get completions with better grouping
 local function get_completions()
 	if not M.config.completion.enabled then
 		return {}
@@ -160,29 +194,45 @@ local function get_completions()
 		local ok, cmds = pcall(vim.fn.getcompletion, prefix, "cmdline")
 		if ok and cmds then
 			for _, cmd in ipairs(cmds) do
-				table.insert(items, { text = cmd, kind = "Command" })
+				table.insert(items, {
+					text = cmd,
+					kind = "Command",
+					icon = "󰘳 ",
+				})
 			end
 		end
 
-		-- History (limit to 5)
+		-- Recent history (separated)
 		local history = get_history()
 		for i = 1, math.min(5, #history) do
 			if history[i] ~= text then
-				table.insert(items, { text = history[i], kind = "History" })
+				table.insert(items, {
+					text = history[i],
+					kind = "History",
+					icon = "󰋚 ",
+				})
 			end
 		end
 	elseif M.state.mode == "/" or M.state.mode == "?" then
 		-- Current word under cursor
 		local word = vim.fn.expand("<cword>")
 		if word and word ~= "" and word ~= text then
-			table.insert(items, { text = word, kind = "Word" })
+			table.insert(items, {
+				text = word,
+				kind = "Word",
+				icon = "󰊄 ",
+			})
 		end
 
 		-- Search history
 		local history = get_history()
 		for i = 1, math.min(8, #history) do
 			if history[i] ~= text then
-				table.insert(items, { text = history[i], kind = "History" })
+				table.insert(items, {
+					text = history[i],
+					kind = "History",
+					icon = "󰋚 ",
+				})
 			end
 		end
 	end
@@ -195,7 +245,7 @@ local function get_completions()
 	return items
 end
 
--- Render UI
+-- Render UI with improved styling
 local function render()
 	if not M.state.buf or not vim.api.nvim_buf_is_valid(M.state.buf) then
 		return
@@ -204,11 +254,11 @@ local function render()
 	local lines = {}
 	local highlights = {}
 
-	-- Build prompt line
+	-- Build prompt line with proper spacing
 	local icon = get_icon(M.state.mode)
 	local prompt = icon .. M.state.text
 
-	-- Show hint when empty
+	-- Show hint when empty (inspired by Noice.nvim)
 	if M.state.text == "" then
 		local hint = M.state.mode == "/" and "Search forward..."
 			or M.state.mode == "?" and "Search backward..."
@@ -217,8 +267,8 @@ local function render()
 		prompt = prompt .. hint
 		table.insert(highlights, {
 			line = 0,
-			col = #icon,
-			end_col = #prompt,
+			col = vim.fn.strwidth(icon),
+			end_col = vim.fn.strwidth(prompt),
 			hl = "CmdlineHint",
 		})
 	end
@@ -229,61 +279,118 @@ local function render()
 	table.insert(highlights, {
 		line = 0,
 		col = 0,
-		end_col = #icon,
-		hl = "CmdlinePrompt",
+		end_col = vim.fn.strwidth(icon),
+		hl = "CmdlinePromptIcon",
 	})
 
-	-- Cursor highlight
-	local cursor_col = #icon + M.state.cursor_pos - 1
+	-- Text highlight
+	if M.state.text ~= "" then
+		table.insert(highlights, {
+			line = 0,
+			col = vim.fn.strwidth(icon),
+			end_col = vim.fn.strwidth(icon .. M.state.text),
+			hl = "CmdlinePrompt",
+		})
+	end
+
+	-- Cursor highlight (with higher priority)
+	local cursor_col = vim.fn.strwidth(icon) + vim.fn.strwidth(M.state.text:sub(1, M.state.cursor_pos - 1))
+	local cursor_char = M.state.text:sub(M.state.cursor_pos, M.state.cursor_pos)
+	local cursor_width = cursor_char ~= "" and vim.fn.strwidth(cursor_char) or 1
+
 	table.insert(highlights, {
 		line = 0,
 		col = cursor_col,
-		end_col = cursor_col + 1,
+		end_col = cursor_col + cursor_width,
 		hl = "CmdlineCursor",
+		priority = 200,
 	})
 
-	-- Completions
+	-- Completions with modern styling
 	if #M.state.completions > 0 then
+		-- Separator line
 		table.insert(lines, string.rep("─", 80))
+		table.insert(highlights, {
+			line = 1,
+			col = 0,
+			end_col = 80,
+			hl = "CmdlineSeparator",
+		})
 
+		-- Completion items
 		for i, item in ipairs(M.state.completions) do
 			local selected = i == M.state.completion_idx
-			local prefix_char = selected and "▶ " or "  "
-			local kind = item.kind and (" [" .. item.kind .. "]") or ""
-			local line = prefix_char .. item.text .. kind
+			local prefix_char = selected and "󰄵 " or "󰄱 "
+			local icon_str = item.icon or ""
+			local kind = item.kind and (" " .. item.kind) or ""
+			local line = prefix_char .. icon_str .. item.text .. kind
 			table.insert(lines, line)
 
+			local line_idx = #lines - 1
+
+			-- Selection highlight
 			if selected then
 				table.insert(highlights, {
-					line = #lines - 1,
+					line = line_idx,
 					col = 0,
-					end_col = #line,
+					end_col = vim.fn.strwidth(line),
 					hl = "CmdlineSelection",
 				})
 			end
+
+			-- Kind highlight
+			if kind ~= "" then
+				local start = vim.fn.strwidth(prefix_char .. icon_str .. item.text)
+				table.insert(highlights, {
+					line = line_idx,
+					col = start,
+					end_col = start + vim.fn.strwidth(kind),
+					hl = "CmdlineItemKind",
+				})
+			end
+		end
+
+		-- More items indicator
+		if #M.state.completions > M.config.completion.max_items then
+			local more = string.format("󰇘 %d more...", #M.state.completions - M.config.completion.max_items)
+			table.insert(lines, more)
+			table.insert(highlights, {
+				line = #lines - 1,
+				col = 0,
+				end_col = vim.fn.strwidth(more),
+				hl = "CmdlineHint",
+			})
 		end
 	end
 
 	-- Set buffer content
-	vim.api.nvim_buf_set_lines(M.state.buf, 0, -1, false, lines)
+	pcall(vim.api.nvim_buf_set_lines, M.state.buf, 0, -1, false, lines)
 
-	-- Clear and set highlights
-	vim.api.nvim_buf_clear_namespace(M.state.buf, M.state.ns_id, 0, -1)
+	-- Clear old highlights
+	pcall(vim.api.nvim_buf_clear_namespace, M.state.buf, M.state.ns_id, 0, -1)
+
+	-- Apply highlights with byte-accurate positioning
 	for _, hl in ipairs(highlights) do
-		pcall(vim.api.nvim_buf_set_extmark, M.state.buf, M.state.ns_id, hl.line, hl.col, {
-			end_col = hl.end_col,
-			hl_group = hl.hl,
-			priority = 100,
-		})
+		local line_text = lines[hl.line + 1]
+		if line_text then
+			local byte_col = vim.str_byteindex(line_text, hl.col, true) or hl.col
+			local byte_end_col = vim.str_byteindex(line_text, hl.end_col, true) or hl.end_col
+
+			pcall(vim.api.nvim_buf_set_extmark, M.state.buf, M.state.ns_id, hl.line, byte_col, {
+				end_col = byte_end_col,
+				hl_group = hl.hl,
+				priority = hl.priority or 100,
+			})
+		end
 	end
 
-	-- Resize window
+	-- Resize window dynamically
 	local target_height = math.min(#lines, M.config.window.max_height)
 	if M.state.win and vim.api.nvim_win_is_valid(M.state.win) then
 		pcall(vim.api.nvim_win_set_height, M.state.win, target_height)
 
 		-- Set cursor position
-		local col = #icon + M.state.cursor_pos - 1
+		local col = vim.fn.strwidth(icon) + vim.fn.strwidth(M.state.text:sub(1, M.state.cursor_pos - 1))
 		pcall(vim.api.nvim_win_set_cursor, M.state.win, { 1, col })
 	end
 end
@@ -318,7 +425,7 @@ local function trigger_completions()
 	)
 end
 
--- Input handlers
+-- Input handlers (unchanged for brevity - keeping original logic)
 local function insert_char(char)
 	local before = M.state.text:sub(1, M.state.cursor_pos - 1)
 	local after = M.state.text:sub(M.state.cursor_pos)
@@ -550,7 +657,6 @@ function M.execute()
 		-- Execute based on mode
 		if mode == ":" then
 			local cmd = text
-			-- Add range if present
 			if range then
 				cmd = range .. cmd
 			end
@@ -561,15 +667,11 @@ function M.execute()
 				vim.notify(msg, vim.log.levels.ERROR)
 			end
 		elseif mode == "/" or mode == "?" then
-			-- Set search register
 			vim.fn.setreg("/", text)
 			vim.o.hlsearch = true
-
-			-- Perform search
 			local flags = mode == "/" and "" or "b"
 			pcall(vim.fn.search, text, flags)
 		elseif mode == "=" then
-			-- Execute Lua
 			local ok, result = pcall(function()
 				local chunk, load_err = loadstring("return " .. text)
 				if not chunk then
@@ -632,7 +734,7 @@ function M.open(mode)
 	local opts = calculate_layout()
 	M.state.win = vim.api.nvim_open_win(M.state.buf, true, opts)
 
-	-- Window options
+	-- Window options with modern styling
 	vim.wo[M.state.win].winblend = M.config.window.blend
 	vim.wo[M.state.win].winhighlight = "Normal:CmdlineNormal,FloatBorder:CmdlineBorder"
 	vim.wo[M.state.win].wrap = false

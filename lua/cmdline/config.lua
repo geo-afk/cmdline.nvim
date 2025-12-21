@@ -1,3 +1,6 @@
+-- config.lua
+-- Enhanced modern cmdline configuration with proper icons and improved UI
+
 local M = {}
 
 M.defaults = {
@@ -64,68 +67,68 @@ M.defaults = {
 	-- Icons (Nerd Font required) - Based on Noice.nvim and modern standards
 	icons = {
 		-- Mode icons
-		cmdline = " ",
-		search = " ",
-		search_up = " ",
+		cmdline = "󰘳 ",
+		search = "󰍉 ",
+		search_up = "󰍞 ",
 		filter = "$ ",
-		lua = " ",
+		lua = "󰢱 ",
 		help = "󰋖 ",
 
 		-- Completion kinds (based on LSP specification and lspkind.nvim)
-		Command = " ",
+		Command = "󰘳 ",
 		Function = "󰊕 ",
 		Variable = "󰀫 ",
 		Action = "󰜎 ",
 		History = "󰋚 ",
 		File = "󰈙 ",
-		Buffer = "󰈙 ",
+		Buffer = "󰈔 ",
 		Word = "󰊄 ",
 		Help = "󰋖 ",
 
 		-- LSP kinds (VS Code-style from lspkind.nvim)
 		Text = "󰉿 ",
 		Method = "󰆧 ",
-		Module = " ",
+		Module = "󰕳 ",
 		Class = "󰠱 ",
 		Property = "󰜢 ",
 		Field = "󰜢 ",
 		Constructor = " ",
-		Enum = " ",
-		Interface = " ",
+		Enum = "󰕘 ",
+		Interface = "󰜰 ",
 		Keyword = "󰌋 ",
-		Snippet = " ",
+		Snippet = "󰩫 ",
 		Color = "󰏘 ",
 		Reference = "󰈇 ",
 		Folder = "󰉋 ",
 		EnumMember = " ",
 		Constant = "󰏿 ",
 		Struct = "󰙅 ",
-		Event = " ",
+		Event = "󰉁 ",
 		Operator = "󰆕 ",
-		TypeParameter = " ",
+		TypeParameter = "󰊄 ",
 		Unit = "󰑭 ",
 		Value = "󰎠 ",
 
 		-- Git kinds
-		Modified = " ",
-		Added = " ",
-		Deleted = " ",
-		Untracked = " ",
+		Modified = "󰏫 ",
+		Added = "󰐕 ",
+		Deleted = "󰍴 ",
+		Untracked = "󰎔 ",
 		Renamed = "󰁕 ",
 		Ignored = " ",
 
 		-- UI elements
-		selected = " ",
-		item = " ",
+		selected = "󰄵 ",
+		item = "󰄱 ",
 		separator = "─",
 		more = "󰇘 ",
-		ellipsis = "… ",
-		loading = " ",
+		ellipsis = "…",
+		loading = "󰔟 ",
 		error = " ",
 		warning = " ",
 		info = " ",
 		hint = "󰌶 ",
-		success = " ",
+		success = "󰄴 ",
 	},
 
 	-- Completion settings
