@@ -1,20 +1,29 @@
+-- config.lua
 local M = {}
 
 M.defaults = {
 	-- Window configuration
 	window = {
 		relative = "editor",
-		position = "bottom", -- "top", "bottom", "center"
-		width = 0.6, -- percentage or absolute
+		position = "center", -- Changed to "center" for a more modern, floating popup feel like Noice.nvim
+		width = 0.8, -- Increased width for better readability
 		height = 1, -- initial height (grows with completions)
-		max_height = 13,
+		max_height = 15, -- Slightly increased for more completions
 		border = "rounded", -- "none", "single", "double", "rounded", "solid", "shadow"
 		zindex = 50,
-		title = " 󰘳 Command ",
+		title = " Command ",
 		title_pos = "center",
+		blend = 10, -- Added slight transparency for a nicer, modern look
 	},
 
-	-- Theme and colors
+	-- Animation settings (added based on animation.lua usage for smoother UI transitions)
+	animation = {
+		enabled = true,
+		duration = 200, -- ms for fade/slide animations
+		slide_distance = 10, -- Distance for slide-in animation
+	},
+
+	-- Theme and colors (kept Catppuccin Mocha-inspired, but can be adjusted; it's popular and nice)
 	theme = {
 		-- Background and foreground
 		bg = "#1e1e2e",
@@ -53,15 +62,14 @@ M.defaults = {
 		success_fg = "#a6e3a1",
 	},
 
-	-- Icons (Nerd Font required)
-
+	-- Icons (Nerd Font required) - Updated to match Noice.nvim defaults where possible for consistency and nice look
 	icons = {
-		cmdline = "󰘳 ",
-		search = "󰍉 ",
-		search_up = "󰍈 ",
-		filter = "󰈲 ",
-		lua = "󰢱 ",
-		help = "󰋖 ",
+		cmdline = " ",
+		search = "  ",
+		search_up = "  ",
+		filter = "$ ",
+		lua = " ",
+		help = " ",
 
 		-- Completion kinds
 		Command = "󰘳 ",
