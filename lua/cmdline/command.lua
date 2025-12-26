@@ -1,5 +1,6 @@
 local M = {}
 local config = {}
+
 -- Utility: trim whitespace (fallback, no dependency)
 local function trim(s)
 	if not s then
@@ -7,11 +8,13 @@ local function trim(s)
 	end
 	return s:match("^%s*(.-)%s*$") or ""
 end
+
 --- Setup module config
 ---@param cfg table
 function M.setup(cfg)
 	config = cfg or {}
 end
+
 --- Main entry: smart execute based on mode
 ---@param text string
 ---@param mode string
@@ -23,6 +26,7 @@ function M.execute(text, mode, context)
 	if text == "" then
 		return true, nil
 	end
+
 	if mode == ":" then
 		return M.execute_cmdline(text, context)
 	elseif mode == "/" or mode == "?" then
@@ -30,8 +34,10 @@ function M.execute(text, mode, context)
 	elseif mode == "=" then
 		return M.execute_lua(text)
 	end
+
 	return false, "Unknown mode: " .. tostring(mode)
 end
+
 --- Execute an Ex command safely
 ---@param cmd string
 ---@param context table
@@ -58,6 +64,7 @@ function M.execute_cmdline(cmd, context)
 			return true, nil
 		end
 	end
+
 	local ok, err = pcall(function()
 		-- Prepend range if present
 		if context and context.range then
@@ -69,6 +76,7 @@ function M.execute_cmdline(cmd, context)
 			vim.api.nvim_cmd({ cmd = "execute", args = { cmd } }, {})
 		end
 	end)
+
 	if not ok then
 		local msg = tostring(err):gsub("^E%d+:%s*", "")
 		vim.schedule(function()
@@ -76,8 +84,10 @@ function M.execute_cmdline(cmd, context)
 		end)
 		return false, msg
 	end
+
 	return true, nil
 end
+
 --- Search pattern in buffer
 ---@param pattern string
 ---@param mode string "/" or "?"
@@ -88,20 +98,25 @@ function M.execute_search(pattern, mode, context)
 	if trim(pattern) == "" then
 		return true, nil
 	end
+
 	if context and context.original_win and vim.api.nvim_win_is_valid(context.original_win) then
 		pcall(vim.api.nvim_set_current_win, context.original_win)
 	end
+
 	local ok, err = pcall(function()
 		vim.fn.setreg("/", pattern)
-		vim.o.hlsearch = true
+		vim.o.hlsearch = true -- Fixed: use global option
 		local flags = (mode == "/") and "" or "b"
 		vim.fn.search(pattern, flags)
 	end)
+
 	if not ok then
 		return false, tostring(err)
 	end
+
 	return true, nil
 end
+
 --- Execute Lua expression or chunk
 ---@param expr string
 ---@return boolean
@@ -118,16 +133,20 @@ function M.execute_lua(expr)
 		end
 		return chunk()
 	end)
+
 	if not ok then
 		return false, tostring(result)
 	end
+
 	if result ~= nil then
 		vim.schedule(function()
 			require("cmdline.messages").show(vim.inspect(result), "info")
 		end)
 	end
+
 	return true, nil
 end
+
 --- Check if the cmd is quit or quit-like
 ---@param cmd string
 ---@return boolean
@@ -135,6 +154,7 @@ function M.is_quit_command(cmd)
 	cmd = trim(cmd)
 	-- Strip range if present
 	cmd = cmd:gsub("^%d+,%d+%s*", ""):gsub("^%s*", "")
+
 	local quit_patterns = {
 		"^q!?$",
 		"^quit!?$",
@@ -146,11 +166,14 @@ function M.is_quit_command(cmd)
 		"^ZQ$",
 		"^ZZ$",
 	}
+
 	for _, pat in ipairs(quit_patterns) do
 		if cmd:match(pat) then
 			return true
 		end
 	end
+
 	return false
 end
+
 return M
