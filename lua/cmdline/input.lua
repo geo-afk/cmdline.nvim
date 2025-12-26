@@ -324,6 +324,7 @@ function M:handle_redo()
 end
 
 ---Handle paste from register - FIXED
+---Handle paste from register - FIXED
 function M:handle_paste()
 	-- Get next character for register
 	local ok, reg_char = pcall(vim.fn.getcharstr)
@@ -350,6 +351,13 @@ function M:handle_paste()
 
 	UI:render()
 	Completion:trigger()
+
+	-- Critical fix: Re-enter insert mode after render to restore keymaps
+	vim.schedule(function()
+		if State.active and vim.fn.mode() ~= "i" then
+			vim.cmd("startinsert")
+		end
+	end)
 end
 
 ---Handle command execution
