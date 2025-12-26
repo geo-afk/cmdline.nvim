@@ -1,3 +1,4 @@
+-- lua/cmdline/ui.lua (Full Fixed Version)
 local M = {}
 local State = require("cmdline.state")
 local config
@@ -132,9 +133,11 @@ function M:render()
 	local icon = config.icons.cmdline
 	if State.mode == "/" then
 		icon = config.icons.search
-	elseif State.mode == "?" then
+	end
+	if State.mode == "?" then
 		icon = config.icons.search_up
-	elseif State.mode == "=" then
+	end
+	if State.mode == "=" then
 		icon = config.icons.lua
 	end
 

@@ -1,10 +1,19 @@
+-- lua/cmdline/command.lua (Full Fixed Version)
 local M = {}
 local config
 
+---Setup commands module
+---@param cfg table
 function M.setup(cfg)
 	config = cfg
 end
 
+---Execute command with smart handling
+---@param text string Command text
+---@param mode string Command mode
+---@param context table Original context (window, buffer, range)
+---@return boolean success
+---@return string|nil error
 function M:execute(text, mode, context)
 	text = vim.trim(text or "")
 
@@ -12,14 +21,7 @@ function M:execute(text, mode, context)
 		return true, nil
 	end
 
-	-- Guard: mode should be string
-	if type(mode) ~= "string" then
-		vim.schedule(function()
-			vim.notify("Invalid mode type: " .. vim.inspect(mode), vim.log.levels.ERROR)
-		end)
-		return false, "Invalid mode"
-	end
-
+	-- Handle different modes
 	if mode == ":" then
 		return self:execute_cmdline(text, context)
 	elseif mode == "/" or mode == "?" then
@@ -28,7 +30,7 @@ function M:execute(text, mode, context)
 		return self:execute_lua(text)
 	end
 
-	-- Safe error message
+	-- Safe error for unknown mode
 	local err_msg = "Unknown mode: " .. vim.inspect(mode)
 	vim.schedule(function()
 		require("cmdline.messages").show(err_msg, "error")
@@ -36,13 +38,21 @@ function M:execute(text, mode, context)
 	return false, err_msg
 end
 
--- Rest of the functions unchanged from your original
+---Execute command line command
+---@param cmd string
+---@param context table
+---@return boolean success
+---@return string|nil error
 function M:execute_cmdline(cmd, context)
+	cmd = vim.trim(cmd or "")
+
+	-- Handle smart quit
 	if config.features.smart_quit and self:is_quit_command(cmd) then
-		local target_win = context and context.original_win or vim.api.nvim_get_current_win()
-		if target_win and vim.api.nvim_win_is_valid(target_win) then
+		local target_win = context.original_win or vim.api.nvim_get_current_win()
+		if vim.api.nvim_win_is_valid(target_win) then
 			local force = cmd:match("!") ~= nil
 
+			-- Handle write-quit commands
 			if cmd:match("^wq") or cmd:match("^x") or cmd:match("^ZZ") then
 				local buf = vim.api.nvim_win_get_buf(target_win)
 				if vim.bo[buf].modified then
@@ -60,38 +70,52 @@ function M:execute_cmdline(cmd, context)
 		end
 	end
 
+	-- Execute command with proper context and range support
 	local ok, result = pcall(function()
-		if context and context.range then
+		-- If we have a range context, prepend it to the command
+		if context.range then
 			cmd = context.range .. cmd
 		end
+
 		vim.cmd(cmd)
 	end)
 
 	if ok then
 		return true, nil
 	else
-		local err_msg = tostring(result):gsub("^Vim%(.-%):", ""):gsub("^E%d+:%s*", "")
+		local err_msg = tostring(result):gsub("^Vim%(.-%):", ""):gsub("^E%d+:%s*", ""):trim()
 		vim.schedule(function()
-			require("cmdline.messages").show(err_msg, "error")
+			require("cmdline.messages").show(err_msg or "Unknown error", "error")
 		end)
 		return false, err_msg
 	end
 end
 
+---Execute search command
+---@param pattern string
+---@param mode string
+---@param context table
+---@return boolean success
+---@return string|nil error
 function M:execute_search(pattern, mode, context)
 	if pattern == "" then
 		return true, nil
 	end
 
-	if context and context.original_win and vim.api.nvim_win_is_valid(context.original_win) then
+	-- Ensure we're in the right window for search
+	if context.original_win and vim.api.nvim_win_is_valid(context.original_win) then
 		pcall(vim.api.nvim_set_current_win, context.original_win)
 	end
 
+	-- Escape pattern for vim.fn.search if needed
 	local search_flags = mode == "/" and "" or "b"
 
 	local ok, result = pcall(function()
+		-- Set the search register
 		vim.fn.setreg("/", pattern)
 		vim.o.hlsearch = true
+
+		-- Perform the search
 		vim.fn.search(pattern, search_flags)
 	end)
 
@@ -102,7 +126,12 @@ function M:execute_search(pattern, mode, context)
 	end
 end
 
+---Execute Lua expression
+---@param expr string
+---@return boolean success
+---@return string|nil error
 function M:execute_lua(expr)
+	-- Remove leading '=' if present
 	expr = expr:gsub("^=", "")
 
 	local ok, result = pcall(function()
@@ -110,9 +139,11 @@ function M:execute_lua(expr)
 		if not chunk then
 			chunk, err = loadstring(expr)
 		end
+
 		if not chunk then
 			error(err)
 		end
+
 		return chunk()
 	end)
 
@@ -126,6 +157,9 @@ function M:execute_lua(expr)
 	end
 end
 
+---Check if command is a quit command
+---@param cmd string
+---@return boolean
 function M:is_quit_command(cmd)
 	local quit_patterns = {
 		"^q!?$",
@@ -145,6 +179,7 @@ function M:is_quit_command(cmd)
 			return true
 		end
 	end
+
 	return false
 end
 

@@ -1,37 +1,26 @@
+-- lua/cmdline/init.lua (Full Fixed Version)
 local M = {}
-
-local config
-local State
-local UI
-local Input
-local Completion
-local Command
-local Animation
 
 ---Setup the cmdline plugin
 ---@param opts table|nil User configuration
 function M.setup(opts)
-	-- Load and merge config
 	local Config = require("cmdline.config")
-	config = vim.tbl_deep_extend("force", Config.defaults, opts or {})
+	local config = vim.tbl_deep_extend("force", Config.defaults, opts or {})
 
-	-- Require modules AFTER config is ready
-	State = require("cmdline.state")
-	UI = require("cmdline.ui")
-	Input = require("cmdline.input")
-	Completion = require("cmdline.completion")
-	Command = require("cmdline.command")
+	local State = require("cmdline.state")
+	local UI = require("cmdline.ui")
+	local Input = require("cmdline.input")
+	local Completion = require("cmdline.completion")
+	local Command = require("cmdline.command")
 	local anim_mod = require("cmdline.animation")
-	Animation = anim_mod.Animation
-	anim_mod.setup(config) -- setup animation with config
+	local Animation = anim_mod.Animation
+	anim_mod.setup(config)
 
-	-- Setup modules
 	UI.setup(config)
 	Input.setup(config)
 	Completion.setup(config)
 	Command.setup(config)
 
-	-- Expose for external use
 	M.config = config
 	M.State = State
 	M.UI = UI
@@ -40,7 +29,6 @@ function M.setup(opts)
 	M.Command = Command
 	M.Animation = Animation
 
-	-- User commands and keymaps
 	vim.api.nvim_create_user_command("Cmdline", function(args)
 		local mode = args.args ~= "" and args.args or ":"
 		M.open(mode)
@@ -70,7 +58,6 @@ function M.setup(opts)
 		end, { desc = "Command line" })
 	end
 
-	-- Cleanup on exit
 	vim.api.nvim_create_autocmd("VimLeavePre", {
 		callback = function()
 			if State.active then
@@ -79,7 +66,6 @@ function M.setup(opts)
 		end,
 	})
 
-	-- Re-render on resize
 	vim.api.nvim_create_autocmd("VimResized", {
 		callback = function()
 			if State.active then
@@ -92,72 +78,72 @@ function M.setup(opts)
 end
 
 function M.open(mode)
-	if State.active then
+	if M.State.active then
 		return
 	end
 
 	mode = mode or ":"
-	State:init(mode)
-	State.original_win = vim.api.nvim_get_current_win()
-	State.original_buf = vim.api.nvim_get_current_buf()
+	M.State:init(mode)
+	M.State.original_win = vim.api.nvim_get_current_win()
+	M.State.original_buf = vim.api.nvim_get_current_buf()
 
 	if mode == ":" then
 		local vim_mode = vim.fn.mode()
 		if vim.tbl_contains({ "v", "V", "\22" }, vim_mode) then
-			State.text = "'<,'>"
-			State.cursor_pos = #State.text + 1
-			State.has_range = true
+			M.State.text = "'<,'>"
+			M.State.cursor_pos = #M.State.text + 1
+			M.State.has_range = true
 		end
 	end
 
-	if not UI:create() then
+	if not M.UI:create() then
 		vim.notify("Failed to create cmdline window", vim.log.levels.ERROR)
 		return
 	end
 
-	Input:setup_buffer()
-	UI:render()
+	M.Input:setup_buffer()
+	M.UI:render()
 
-	if config.animation.enabled and Animation then
-		Animation:fade_in(State.win)
-		if config.window.position == "bottom" then
-			Animation:slide_in(State.win, "bottom")
+	if M.config.animation.enabled and M.Animation then
+		M.Animation:fade_in(M.State.win)
+		if M.config.window.position == "bottom" then
+			M.Animation:slide_in(M.State.win, "bottom")
 		else
-			Animation:scale_in(State.win)
+			M.Animation:scale_in(M.State.win)
 		end
 	end
 
 	vim.schedule(function()
-		if State.win and vim.api.nvim_win_is_valid(State.win) then
-			vim.api.nvim_set_current_win(State.win)
+		if M.State.win and vim.api.nvim_win_is_valid(M.State.win) then
+			vim.api.nvim_set_current_win(M.State.win)
 			vim.cmd("startinsert")
 		end
 	end)
 end
 
 function M.close()
-	if not State.active then
+	if not M.State.active then
 		return
 	end
 
-	if Animation then
-		Animation:cleanup()
+	if M.Animation then
+		M.Animation:cleanup()
 	end
-	if Completion then
-		Completion:cleanup()
+	if M.Completion then
+		M.Completion:cleanup()
 	end
-	UI:destroy()
+	M.UI:destroy()
 
-	if State.original_win and vim.api.nvim_win_is_valid(State.original_win) then
-		pcall(vim.api.nvim_set_current_win, State.original_win)
+	if M.State.original_win and vim.api.nvim_win_is_valid(M.State.original_win) then
+		pcall(vim.api.nvim_set_current_win, M.State.original_win)
 	end
 
-	State:reset()
+	M.State:reset()
 	vim.cmd("stopinsert")
 end
 
 function M.execute()
-	if not State.active then
+	if not M.State.active then
 		return
 	end
 
@@ -180,7 +166,8 @@ function M.execute()
 	M.close()
 
 	vim.schedule(function()
-		local success, err = Command.execute(context.text, context.mode, context)
+		-- FIXED: Use local Command, correct args order
+		local success, err = Command:execute(text, context.mode, context)
 		if not success and err then
 			vim.notify(err, vim.log.levels.ERROR)
 		end

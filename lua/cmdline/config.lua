@@ -1,3 +1,4 @@
+-- lua/cmdline/config.lua (Full Fixed Version)
 local M = {}
 
 M.defaults = {
@@ -5,8 +6,7 @@ M.defaults = {
 	window = {
 		relative = "editor",
 		position = "bottom", -- Pinned to bottom
-		width = 65, -- Fixed 80 columns (comfortable) - change to 0.7 for 70% if you prefer
-		-- width = 0.7,           -- Alternative: 70% of screen width (uncomment if preferred)
+		width = 80, -- Fixed 80 columns (comfortable) - change to 0.7 for 70% if you prefer
 		height = 1,
 		max_height = 15,
 		border = "rounded", -- Beautiful curved edges
@@ -16,7 +16,6 @@ M.defaults = {
 		blend = 5, -- Slight transparency for modern feel (0 = solid)
 	},
 
-	-- Rest of your config remains the same...
 	animation = {
 		enabled = true,
 		duration = 150,
@@ -95,20 +94,31 @@ M.defaults = {
 		more = "…",
 	},
 
-	-- Keep the rest exactly as before (completion, features, keymaps, etc.)
 	completion = {
 		enabled = true,
 		auto_trigger = true,
 		trigger_delay = 50,
 		fuzzy = true,
 		max_items = 40,
+		max_items_per_group = 8,
 		show_kind = true,
 		show_desc = true,
 		auto_select = false,
+
 		smart_enabled = true,
 		lsp_enabled = true,
 		telescope_enabled = true,
 		treesitter_enabled = true,
+
+		sources = {
+			{ name = "cmdline", priority = 100 },
+			{ name = "lsp", priority = 110, enabled = true },
+			{ name = "quick_actions", priority = 90 },
+			{ name = "history", priority = 80, max_items = 10 },
+			{ name = "buffers", priority = 95 },
+			{ name = "files", priority = 105 },
+			{ name = "git", priority = 100 },
+		},
 	},
 
 	features = {
@@ -126,26 +136,67 @@ M.defaults = {
 		backspace = "<BS>",
 		delete_word = "<C-w>",
 		delete_line = "<C-u>",
+
 		move_left = "<C-b>",
 		move_right = "<C-f>",
 		move_home = "<C-a>",
 		move_end = "<C-e>",
+
 		history_prev = "<C-p>",
 		history_next = "<C-n>",
+
 		complete_next = "<Tab>",
 		complete_prev = "<S-Tab>",
 		complete_select = "<CR>",
 		telescope_picker = "<C-Space>",
+
 		undo = "<C-z>",
 		redo = "<C-y>",
+
 		execute = "<CR>",
 		close = { "<Esc>", "<C-c>" },
+
 		paste = "<C-r>",
 	},
 
-	lsp = { enabled = true, debounce_ms = 100 },
-	telescope = { enabled = true, preview = true },
-	treesitter = { enabled = true, highlight = true, validate = true },
+	lsp = {
+		enabled = true,
+		symbol_kinds = {
+			"Function",
+			"Method",
+			"Variable",
+			"Class",
+			"Interface",
+			"Module",
+			"Property",
+			"Field",
+			"Constructor",
+			"Enum",
+			"Constant",
+			"Struct",
+			"Event",
+			"Operator",
+			"TypeParameter",
+		},
+		debounce_ms = 100,
+	},
+
+	telescope = {
+		enabled = true,
+		preview = true,
+		layout_strategy = "vertical",
+		layout_config = {
+			height = 0.95,
+			width = 0.9,
+			preview_cutoff = 40,
+		},
+	},
+
+	treesitter = {
+		enabled = true,
+		highlight = true,
+		validate = true,
+	},
 }
 
 return M
