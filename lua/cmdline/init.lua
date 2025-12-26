@@ -1,19 +1,25 @@
--- lua/cmdline/init.lua (Full Fixed Version)
+-- lua/cmdline/init.lua (FULL FIXED VERSION)
 local M = {}
 
----Setup the cmdline plugin
----@param opts table|nil User configuration
+local config
+local State
+local UI
+local Input
+local Completion
+local Command
+local Animation
+
 function M.setup(opts)
 	local Config = require("cmdline.config")
-	local config = vim.tbl_deep_extend("force", Config.defaults, opts or {})
+	config = vim.tbl_deep_extend("force", Config.defaults, opts or {})
 
-	local State = require("cmdline.state")
-	local UI = require("cmdline.ui")
-	local Input = require("cmdline.input")
-	local Completion = require("cmdline.completion")
-	local Command = require("cmdline.command")
+	State = require("cmdline.state")
+	UI = require("cmdline.ui")
+	Input = require("cmdline.input")
+	Completion = require("cmdline.completion")
+	Command = require("cmdline.command")
 	local anim_mod = require("cmdline.animation")
-	local Animation = anim_mod.Animation
+	Animation = anim_mod.Animation
 	anim_mod.setup(config)
 
 	UI.setup(config)
@@ -60,7 +66,7 @@ function M.setup(opts)
 
 	vim.api.nvim_create_autocmd("VimLeavePre", {
 		callback = function()
-			if State.active then
+			if M.State.active then
 				M.close()
 			end
 		end,
@@ -68,8 +74,8 @@ function M.setup(opts)
 
 	vim.api.nvim_create_autocmd("VimResized", {
 		callback = function()
-			if State.active then
-				UI:render()
+			if M.State.active then
+				M.UI:render()
 			end
 		end,
 	})
@@ -104,12 +110,12 @@ function M.open(mode)
 	M.Input:setup_buffer()
 	M.UI:render()
 
-	if M.config.animation.enabled and M.Animation then
-		M.Animation:fade_in(M.State.win)
-		if M.config.window.position == "bottom" then
-			M.Animation:slide_in(M.State.win, "bottom")
+	if config.animation.enabled and Animation then
+		Animation:fade_in(M.State.win)
+		if config.window.position == "bottom" then
+			Animation:slide_in(M.State.win, "bottom")
 		else
-			M.Animation:scale_in(M.State.win)
+			Animation:scale_in(M.State.win)
 		end
 	end
 
@@ -126,11 +132,11 @@ function M.close()
 		return
 	end
 
-	if M.Animation then
-		M.Animation:cleanup()
+	if Animation then
+		Animation:cleanup()
 	end
-	if M.Completion then
-		M.Completion:cleanup()
+	if Completion then
+		Completion:cleanup()
 	end
 	M.UI:destroy()
 
@@ -147,26 +153,25 @@ function M.execute()
 		return
 	end
 
-	local text = vim.trim(State.text)
+	local text = vim.trim(M.State.text)
 	if text == "" then
 		M.close()
 		return
 	end
 
-	State:add_to_history(text)
+	M.State:add_to_history(text)
 
 	local context = {
-		mode = State.mode,
+		mode = M.State.mode,
 		text = text,
-		original_win = State.original_win,
-		original_buf = State.original_buf,
-		range = State.has_range and "'<,'>" or nil,
+		original_win = M.State.original_win,
+		original_buf = M.State.original_buf,
+		range = M.State.has_range and "'<,'>" or nil,
 	}
 
 	M.close()
 
 	vim.schedule(function()
-		-- FIXED: Use local Command, correct args order
 		local success, err = Command:execute(text, context.mode, context)
 		if not success and err then
 			vim.notify(err, vim.log.levels.ERROR)

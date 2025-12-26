@@ -1,63 +1,44 @@
--- lua/cmdline/ui.lua (Full Fixed Version)
+-- lua/cmdline/ui.lua (FULL FIXED VERSION - Better icon visibility)
 local M = {}
 local State = require("cmdline.state")
 local config
 
--- Lazy-load Tree-sitter module
 local TreeSitter
 
----Setup UI module
----@param cfg table
 function M.setup(cfg)
 	config = cfg
 	M.setup_highlights()
 
-	-- Try to load Tree-sitter integration
 	local ok, ts = pcall(require, "cmdline.treesitter_parser")
 	if ok then
 		TreeSitter = ts
 	end
 end
 
----Setup highlight groups
 function M.setup_highlights()
 	local t = config.theme
 
 	vim.api.nvim_set_hl(0, "CmdlineNormal", { bg = t.bg, fg = t.fg })
 	vim.api.nvim_set_hl(0, "CmdlineBorder", { fg = t.border_fg, bg = t.border_bg })
-	vim.api.nvim_set_hl(0, "CmdlinePrompt", { bg = t.prompt_bg, fg = t.prompt_fg, bold = true })
 	vim.api.nvim_set_hl(0, "CmdlinePromptIcon", { fg = t.prompt_icon_fg, bold = true })
 	vim.api.nvim_set_hl(0, "CmdlineCursor", { bg = t.cursor_bg, fg = t.cursor_fg })
 	vim.api.nvim_set_hl(0, "CmdlineSelection", { bg = t.selection_bg, fg = t.selection_fg, bold = true })
 	vim.api.nvim_set_hl(0, "CmdlineItem", { fg = t.item_fg })
 	vim.api.nvim_set_hl(0, "CmdlineItemKind", { fg = t.item_kind_fg })
 	vim.api.nvim_set_hl(0, "CmdlineItemDesc", { fg = t.item_desc_fg, italic = true })
-	vim.api.nvim_set_hl(0, "CmdlineHeader", { bg = t.header_bg, fg = t.header_fg, bold = true })
 	vim.api.nvim_set_hl(0, "CmdlineSeparator", { fg = t.separator_fg })
 	vim.api.nvim_set_hl(0, "CmdlineHint", { fg = t.hint_fg, italic = true })
-	vim.api.nvim_set_hl(0, "CmdlineError", { fg = t.error_fg })
-	vim.api.nvim_set_hl(0, "CmdlineSuccess", { fg = t.success_fg })
-
-	-- Tree-sitter groups
-	vim.api.nvim_set_hl(0, "CmdlineKeyword", { fg = t.border_fg, bold = true })
-	vim.api.nvim_set_hl(0, "CmdlineFunction", { fg = t.success_fg })
-	vim.api.nvim_set_hl(0, "CmdlineString", { fg = t.success_fg })
-	vim.api.nvim_set_hl(0, "CmdlineNumber", { fg = t.prompt_icon_fg })
-	vim.api.nvim_set_hl(0, "CmdlineComment", { fg = t.hint_fg, italic = true })
-	vim.api.nvim_set_hl(0, "CmdlineOperator", { fg = t.item_kind_fg })
 end
 
----Calculate window layout
 function M.calculate_layout()
 	local ui_width = vim.o.columns
 	local ui_height = vim.o.lines
 
-	-- Handle width (percentage or fixed)
 	local width = config.window.width
 	if type(width) == "number" and width < 1 then
 		width = math.floor(ui_width * width)
 	end
-	width = math.max(40, math.min(width, ui_width - 4)) -- Clamp to reasonable size
+	width = math.max(40, math.min(width, ui_width - 4))
 
 	local height = config.window.height
 
@@ -72,7 +53,7 @@ function M.calculate_layout()
 	col = math.floor((ui_width - width) / 2)
 
 	return {
-		relative = config.window.relative,
+		relative = "editor",
 		row = row,
 		col = col,
 		width = width,
@@ -85,8 +66,6 @@ function M.calculate_layout()
 	}
 end
 
----Create UI window and buffer
----@return boolean success
 function M:create()
 	local layout = M.calculate_layout()
 
@@ -100,7 +79,6 @@ function M:create()
 		return false
 	end
 
-	-- Window options
 	vim.wo[State.win].winhighlight = "Normal:CmdlineNormal,FloatBorder:CmdlineBorder"
 	vim.wo[State.win].winblend = config.window.blend or 0
 	vim.wo[State.win].wrap = false
@@ -110,7 +88,6 @@ function M:create()
 	vim.wo[State.win].signcolumn = "no"
 	vim.wo[State.win].foldcolumn = "0"
 
-	-- Buffer options
 	vim.bo[State.buf].buftype = "prompt"
 	vim.bo[State.buf].bufhidden = "wipe"
 	vim.fn.prompt_setprompt(State.buf, "")
@@ -118,7 +95,6 @@ function M:create()
 	return true
 end
 
----Render the UI
 function M:render()
 	if not State.active or not State.buf or not vim.api.nvim_buf_is_valid(State.buf) or State.rendering then
 		return
@@ -129,7 +105,7 @@ function M:render()
 	local lines = {}
 	local highlights = {}
 
-	-- Mode icon
+	-- Mode icon with extra space for visibility
 	local icon = config.icons.cmdline
 	if State.mode == "/" then
 		icon = config.icons.search
@@ -141,34 +117,41 @@ function M:render()
 		icon = config.icons.lua
 	end
 
-	-- Prompt line
-	local prompt = icon .. State.text
+	-- Add padding: icon + space + text
+	local padded_icon = icon .. " "
+	local prompt = padded_icon .. State.text
 	table.insert(lines, prompt)
 
-	-- Icon highlight
-	table.insert(highlights, { line = 0, col = 0, end_col = #icon, hl_group = "CmdlinePromptIcon" })
+	-- Highlight icon (now fully visible)
+	table.insert(highlights, {
+		line = 0,
+		col = 0,
+		end_col = #padded_icon,
+		hl_group = "CmdlinePromptIcon",
+		priority = 150,
+	})
 
-	-- Tree-sitter syntax if enabled
+	-- Tree-sitter highlighting (offset by icon + space)
 	if TreeSitter and config.treesitter.highlight then
 		local hl = TreeSitter.get_highlights(State.text, State.mode)
 		for _, h in ipairs(hl) do
 			h.line = 0
-			h.col_start = h.col_start + #icon
-			h.col_end = h.col_end + #icon
+			h.col_start = h.col_start + #padded_icon
+			h.col_end = h.col_end + #padded_icon
 			table.insert(highlights, h)
 		end
 	end
 
-	-- Cursor
+	-- Cursor position (after icon + space)
 	table.insert(highlights, {
 		line = 0,
-		col = #icon + State.cursor_pos - 1,
-		end_col = #icon + State.cursor_pos,
+		col = #padded_icon + State.cursor_pos - 1,
+		end_col = #padded_icon + State.cursor_pos,
 		hl_group = "CmdlineCursor",
 		priority = 200,
 	})
 
-	-- Completions
+	-- Completions (same as before)
 	if #State.completions > 0 then
 		table.insert(lines, string.rep("─", vim.api.nvim_win_get_width(State.win or 0)))
 		table.insert(highlights, { line = 1, col = 0, end_col = -1, hl_group = "CmdlineSeparator" })
@@ -216,11 +199,10 @@ function M:render()
 		end
 	end
 
-	-- Set lines
+	-- Apply lines and highlights
 	pcall(vim.api.nvim_buf_set_lines, State.buf, 0, -1, false, lines)
-
-	-- Clear & apply highlights
 	pcall(vim.api.nvim_buf_clear_namespace, State.buf, State.ns_id, 0, -1)
+
 	for _, hl in ipairs(highlights) do
 		if hl.line < #lines then
 			local line_text = lines[hl.line + 1] or ""
@@ -236,7 +218,7 @@ function M:render()
 		end
 	end
 
-	-- Safe dynamic resize + bottom pin
+	-- Resize + bottom pin
 	local max_h = tonumber(config.window.max_height) or 15
 	local target_height = math.min(#lines, max_h)
 	target_height = math.max(1, target_height)
@@ -245,7 +227,6 @@ function M:render()
 		local current_height = vim.api.nvim_win_get_height(State.win)
 		if target_height ~= current_height then
 			pcall(vim.api.nvim_win_set_height, State.win, target_height)
-
 			if config.window.position == "bottom" then
 				local ui_height = vim.o.lines
 				local new_row = ui_height - target_height - 2
@@ -256,13 +237,12 @@ function M:render()
 		end
 	end
 
-	-- Update cursor
-	self:update_cursor(#icon)
+	-- Cursor update using padded offset
+	self:update_cursor(#padded_icon)
 
 	State.rendering = false
 end
 
----Update cursor position
 function M:update_cursor(offset)
 	if not State.win or not vim.api.nvim_win_is_valid(State.win) then
 		return
@@ -272,7 +252,6 @@ function M:update_cursor(offset)
 	pcall(vim.api.nvim_win_set_cursor, State.win, { 1, col })
 end
 
----Destroy UI
 function M:destroy()
 	if State.win and vim.api.nvim_win_is_valid(State.win) then
 		pcall(vim.api.nvim_win_close, State.win, true)
