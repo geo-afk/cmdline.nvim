@@ -1,4 +1,3 @@
--- lua/cmdline/init.lua (FULL FIXED VERSION)
 local M = {}
 
 local config
