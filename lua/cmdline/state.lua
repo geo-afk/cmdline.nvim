@@ -1,8 +1,4 @@
--- State management module
--- Handles all plugin state with proper encapsulation
-
 local M = {
-	-- UI state
 	active = false,
 	mode = ":",
 	win = nil,
@@ -11,6 +7,7 @@ local M = {
 	original_win = nil,
 	original_buf = nil,
 	has_range = false,
+	rendering = false,
 
 	-- Input state
 	text = "",
@@ -31,7 +28,7 @@ local M = {
 	max_undo = 50,
 }
 
----Initialize state for a new session
+---Initialize state for new session
 ---@param mode string
 function M:init(mode)
 	self.active = true
@@ -45,6 +42,7 @@ function M:init(mode)
 	self.redo_stack = {}
 	self.has_range = false
 	self.original_buf = nil
+	self.rendering = false
 end
 
 ---Reset all state
@@ -63,6 +61,9 @@ function M:reset()
 	self.history_index = 0
 	self.undo_stack = {}
 	self.redo_stack = {}
+	self.history_cache = {}
+	self.completion_cache = {}
+	self.rendering = false
 end
 
 ---Push current state to undo stack
@@ -97,7 +98,7 @@ function M:undo()
 	-- Restore previous state
 	local state = table.remove(self.undo_stack)
 	self.text = state.text
-	self.cursor_pos = state.cursor_pos
+	self.cursor_pos = math.min(state.cursor_pos, #self.text + 1)
 
 	return true
 end
@@ -118,7 +119,7 @@ function M:redo()
 	-- Restore redone state
 	local state = table.remove(self.redo_stack)
 	self.text = state.text
-	self.cursor_pos = state.cursor_pos
+	self.cursor_pos = math.min(state.cursor_pos, #self.text + 1)
 
 	return true
 end
@@ -127,7 +128,6 @@ end
 ---@return string[] history
 function M:get_history()
 	local hist_type = self.mode == ":" and "cmd" or "search"
-	local history = {}
 
 	-- Cache history to avoid repeated vim.fn calls
 	local cache_key = hist_type
@@ -135,8 +135,11 @@ function M:get_history()
 		return self.history_cache[cache_key]
 	end
 
-	-- Get history from Vim
-	for i = 1, vim.fn.histnr(hist_type) do
+	local history = {}
+	local max = vim.fn.histnr(hist_type)
+
+	-- Get history from Vim (newest first)
+	for i = max, 1, -1 do
 		local item = vim.fn.histget(hist_type, i)
 		if item and item ~= "" then
 			table.insert(history, item)
@@ -165,11 +168,14 @@ end
 ---@param direction "up"|"down"
 ---@return boolean changed
 function M:navigate_history(direction)
-	local hist_type = self.mode == ":" and "cmd" or "search"
-	local max_history = vim.fn.histnr(hist_type)
+	local history = self:get_history()
+
+	if #history == 0 then
+		return false
+	end
 
 	if direction == "up" then
-		self.history_index = math.min(self.history_index + 1, max_history)
+		self.history_index = math.min(self.history_index + 1, #history)
 	else
 		self.history_index = math.max(self.history_index - 1, 0)
 	end
@@ -177,10 +183,7 @@ function M:navigate_history(direction)
 	if self.history_index == 0 then
 		self.text = ""
 	else
-		local item = vim.fn.histget(hist_type, -self.history_index)
-		if item and item ~= "" then
-			self.text = item
-		end
+		self.text = history[self.history_index] or ""
 	end
 
 	self.cursor_pos = #self.text + 1
@@ -190,15 +193,8 @@ end
 ---Set completions
 ---@param completions table[]
 function M:set_completions(completions)
-	-- Safely require config with fallback (prevents nil errors)
-	local ok, Config = pcall(require, "cmdline.config")
-	local auto_select = false
-	if ok and Config and Config.defaults and Config.defaults.completion then
-		auto_select = Config.defaults.completion.auto_select or false
-	end
 	self.completions = completions or {}
-	-- Don't auto-select unless configured (defaults to 0 for safety)
-	self.completion_index = (auto_select and #self.completions > 0) and 1 or 0
+	self.completion_index = 0 -- Don't auto-select
 end
 
 ---Navigate completions
@@ -209,11 +205,19 @@ function M:navigate_completions(direction)
 	end
 
 	if direction == "next" then
-		self.completion_index = self.completion_index % #self.completions + 1
+		if self.completion_index == 0 then
+			self.completion_index = 1
+		else
+			self.completion_index = self.completion_index % #self.completions + 1
+		end
 	else
-		self.completion_index = self.completion_index - 1
-		if self.completion_index < 1 then
+		if self.completion_index == 0 then
 			self.completion_index = #self.completions
+		else
+			self.completion_index = self.completion_index - 1
+			if self.completion_index < 1 then
+				self.completion_index = #self.completions
+			end
 		end
 	end
 end
@@ -230,18 +234,13 @@ end
 ---Insert text at cursor position
 ---@param str string
 function M:insert_text(str)
-	-- FIX: Ensure cursor_pos stays in bounds
+	-- Ensure cursor_pos is valid
 	self.cursor_pos = math.max(1, math.min(self.cursor_pos, #self.text + 1))
 
 	local before = self.text:sub(1, self.cursor_pos - 1)
 	local after = self.text:sub(self.cursor_pos)
 	self.text = before .. str .. after
 	self.cursor_pos = self.cursor_pos + #str
-
-	-- DEBUG: Remove after fixing
-	vim.schedule(function()
-		print(string.format("INSERT: '%s' cursor=%d", self.text, self.cursor_pos))
-	end)
 end
 
 ---Delete character before cursor
@@ -251,16 +250,10 @@ function M:delete_char()
 		return false
 	end
 
-	-- FIX: Correct string slicing
 	local before = self.text:sub(1, self.cursor_pos - 2)
 	local after = self.text:sub(self.cursor_pos)
 	self.text = before .. after
 	self.cursor_pos = self.cursor_pos - 1
-
-	-- DEBUG: Remove after fixing
-	vim.schedule(function()
-		print(string.format("DELETE: '%s' cursor=%d", self.text, self.cursor_pos))
-	end)
 
 	return true
 end

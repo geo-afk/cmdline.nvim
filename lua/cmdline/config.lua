@@ -1,6 +1,3 @@
--- config.lua
--- Enhanced modern cmdline configuration with proper icons and improved UI
-
 local M = {}
 
 M.defaults = {
@@ -65,16 +62,17 @@ M.defaults = {
 	},
 
 	-- Icons (Nerd Font required) - Based on Noice.nvim and modern standards
+
 	icons = {
 		-- Mode icons
-		cmdline = "󰘳 ",
+		cmdline = "󰘳 ", -- command palette
 		search = "󰍉 ",
 		search_up = "󰍞 ",
-		filter = "$ ",
+		filter = "󰈲 ", -- funnel (upgrade from "$")
 		lua = "󰢱 ",
 		help = "󰋖 ",
 
-		-- Completion kinds (based on LSP specification and lspkind.nvim)
+		-- Completion kinds (cmdline / menu)
 		Command = "󰘳 ",
 		Function = "󰊕 ",
 		Variable = "󰀫 ",
@@ -85,14 +83,14 @@ M.defaults = {
 		Word = "󰊄 ",
 		Help = "󰋖 ",
 
-		-- LSP kinds (VS Code-style from lspkind.nvim)
+		-- LSP kinds (VS Code / lspkind compatible)
 		Text = "󰉿 ",
 		Method = "󰆧 ",
 		Module = "󰕳 ",
 		Class = "󰠱 ",
 		Property = "󰜢 ",
 		Field = "󰜢 ",
-		Constructor = " ",
+		Constructor = "󰆴 ", -- added
 		Enum = "󰕘 ",
 		Interface = "󰜰 ",
 		Keyword = "󰌋 ",
@@ -100,7 +98,7 @@ M.defaults = {
 		Color = "󰏘 ",
 		Reference = "󰈇 ",
 		Folder = "󰉋 ",
-		EnumMember = " ",
+		EnumMember = "󰎠 ", -- added
 		Constant = "󰏿 ",
 		Struct = "󰙅 ",
 		Event = "󰉁 ",
@@ -115,7 +113,7 @@ M.defaults = {
 		Deleted = "󰍴 ",
 		Untracked = "󰎔 ",
 		Renamed = "󰁕 ",
-		Ignored = " ",
+		Ignored = "󰈉 ", -- added
 
 		-- UI elements
 		selected = "󰄵 ",
@@ -124,9 +122,9 @@ M.defaults = {
 		more = "󰇘 ",
 		ellipsis = "…",
 		loading = "󰔟 ",
-		error = " ",
-		warning = " ",
-		info = " ",
+		error = "󰅚 ", -- added
+		warning = "󰀪 ", -- added
+		info = "󰋽 ", -- added
 		hint = "󰌶 ",
 		success = "󰄴 ",
 	},

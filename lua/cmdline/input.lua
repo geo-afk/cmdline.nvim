@@ -4,14 +4,6 @@ local UI = require("cmdline.ui")
 local Completion
 local config
 
-local Animation = require("cmdline.animation")
-
--- At the top, change this line:
-local debounced_render = Animation.debounce(function()
-	UI:render()
-end, 80)
-
--- Was 30, increase to 80 or 100
 ---Setup input module
 ---@param cfg table
 function M.setup(cfg)
@@ -97,6 +89,17 @@ function M:setup_buffer()
 		end, opts)
 	end
 
+	-- Additional movement keys
+	vim.keymap.set("i", "<Left>", function()
+		State:move_cursor("left")
+		UI:render()
+	end, opts)
+
+	vim.keymap.set("i", "<Right>", function()
+		State:move_cursor("right")
+		UI:render()
+	end, opts)
+
 	-- History navigation
 	if config.features.history_nav then
 		if km.history_prev then
@@ -140,7 +143,7 @@ function M:setup_buffer()
 	end
 
 	-- Telescope picker
-	if km.telescope_picker then
+	if config.features.telescope_picker and km.telescope_picker then
 		vim.keymap.set("i", km.telescope_picker, function()
 			self:handle_telescope_picker()
 		end, opts)
@@ -161,7 +164,7 @@ function M:setup_buffer()
 		end
 	end
 
-	-- Paste
+	-- Paste - FIXED: Handle paste properly
 	if km.paste then
 		vim.keymap.set("i", km.paste, function()
 			self:handle_paste()
@@ -219,10 +222,9 @@ end
 
 ---Handle backspace
 function M:handle_backspace()
-	-- FIX: Only push undo if deletion succeeds
 	local before = State.text
 	if State:delete_char() then
-		-- Only push if text actually changed
+		-- Only push undo if text actually changed
 		if before ~= State.text then
 			State:push_undo()
 		end
@@ -274,7 +276,7 @@ function M:handle_completion_nav(direction)
 	end
 
 	State:navigate_completions(direction)
-	debounced_render() -- Use debounced version
+	UI:render()
 end
 
 ---Handle completion selection
@@ -298,10 +300,9 @@ function M:handle_completion_select()
 	UI:render()
 end
 
----Handle Telescope picker (NEW)
+---Handle Telescope picker
 function M:handle_telescope_picker()
-	-- Show Telescope enhanced picker
-	if Completion.show_telescope_picker then
+	if Completion and Completion.show_telescope_picker then
 		Completion:show_telescope_picker()
 	else
 		vim.notify("Telescope picker not available", vim.log.levels.WARN)
@@ -322,7 +323,7 @@ function M:handle_redo()
 	end
 end
 
----Handle paste from register
+---Handle paste from register - FIXED
 function M:handle_paste()
 	-- Get next character for register
 	local ok, reg_char = pcall(vim.fn.getcharstr)
@@ -330,23 +331,36 @@ function M:handle_paste()
 		return
 	end
 
+	-- Get content from register
 	local content = vim.fn.getreg(reg_char)
 	if content == "" then
 		return
 	end
 
+	-- Remove newlines if present (flatten to single line)
+	content = content:gsub("\n", " ")
+
 	State:push_undo()
+
+	-- Insert the text at cursor position
 	State:insert_text(content)
+
+	-- Ensure cursor is at the end of inserted text and within bounds
+	State.cursor_pos = math.min(State.cursor_pos, #State.text + 1)
+
 	UI:render()
 	Completion:trigger()
 end
 
 ---Handle command execution
 function M:handle_execute()
+	-- Select completion if one is selected
 	if #State.completions > 0 and State.completion_index > 0 then
 		self:handle_completion_select()
+		return
 	end
-	-- Always execute after potential select
+
+	-- Execute command
 	require("cmdline").execute()
 end
 

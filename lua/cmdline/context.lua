@@ -1,190 +1,243 @@
--- Context provider module for intelligent cmdline suggestions
--- Queries LSP, project state, and environment for context-aware completions
-
 local M = {}
 
--- Cache for expensive operations
-local cache = {
-	lsp_clients = nil,
-	lsp_symbols = {},
-	buffers = nil,
-	git_status = nil,
-	cache_time = {},
+------------------------------------------------------------------------------
+-- Configuration
+------------------------------------------------------------------------------
+---@class ContextProviderConfig
+---@field cache_ttl number Cache time in milliseconds (default: 2000)
+M.config = {
+	cache_ttl = 2000, -- 2 seconds by default
 }
 
-local CACHE_TTL = 2000 -- 2 seconds in milliseconds
+------------------------------------------------------------------------------
+-- Internal cache
+------------------------------------------------------------------------------
+local cache = {
+	lsp_clients = nil,
+	lsp_symbols = nil,
+	buffers = nil,
+	git_status = nil,
+	project_files = nil, -- added for consistency
+}
 
----Check if cache is valid
+local cache_times = {}
+
+------------------------------------------------------------------------------
+-- Cache helpers
+------------------------------------------------------------------------------
+local function now_ms()
+	return vim.loop.now()
+end
+
 ---@param key string
----@return boolean
 local function is_cache_valid(key)
-	local now = vim.uv.now()
-	local cached_time = cache.cache_time[key]
-	return cached_time and (now - cached_time) < CACHE_TTL
+	local ts = cache_times[key]
+	if not ts then
+		return false
+	end
+	return (now_ms() - ts) < M.config.cache_ttl
 end
 
----Update cache timestamp
 ---@param key string
-local function update_cache_time(key)
-	cache.cache_time[key] = vim.uv.now()
+---@param value any
+local function set_cache(key, value)
+	cache[key] = value
+	cache_times[key] = now_ms()
 end
 
----Setup context provider
-function M.setup()
-	-- Clear cache on buffer changes
+---@param key string
+---@return any|nil
+local function get_cache(key)
+	if is_cache_valid(key) then
+		return cache[key]
+	end
+	return nil
+end
+
+local function clear_all_cache()
+	cache = {
+		lsp_clients = nil,
+		lsp_symbols = nil,
+		buffers = nil,
+		git_status = nil,
+		project_files = nil,
+	}
+	cache_times = {}
+end
+
+------------------------------------------------------------------------------
+-- Setup
+------------------------------------------------------------------------------
+---Setup the module and configure cache invalidation
+---@param opts? ContextProviderConfig
+function M.setup(opts)
+	if opts then
+		M.config = vim.tbl_deep_extend("force", M.config, opts)
+	end
+
+	-- Clear cache when switching buffers or after writing
+	local augroup = vim.api.nvim_create_augroup("ContextProviderCache", { clear = true })
 	vim.api.nvim_create_autocmd({ "BufEnter", "BufWritePost" }, {
-		group = vim.api.nvim_create_augroup("CmdlineContext", { clear = true }),
-		callback = function()
-			cache = {
-				lsp_clients = nil,
-				lsp_symbols = {},
-				buffers = nil,
-				git_status = nil,
-				cache_time = {},
-			}
-		end,
+		group = augroup,
+		callback = clear_all_cache,
 	})
 end
 
----Get active LSP clients with caching
----@return table[] clients
+------------------------------------------------------------------------------
+-- LSP Clients
+------------------------------------------------------------------------------
+---Get attached LSP clients for the current buffer
+---@return table[] List of client info tables
 function M.get_lsp_clients()
-	if is_cache_valid("lsp_clients") and cache.lsp_clients then
-		return cache.lsp_clients
+	local cached = get_cache("lsp_clients")
+	if cached then
+		return cached
 	end
 
 	local clients = {}
 	local buf = vim.api.nvim_get_current_buf()
 
-	-- Use vim.lsp.get_clients (Neovim 0.10+) or fallback
-	local ok, buf_clients = pcall(vim.lsp.get_clients, { bufnr = buf })
-	if not ok then
-		-- Fallback for older Neovim versions
-		ok, buf_clients = pcall(vim.lsp.buf_get_clients, buf)
+	-- vim.lsp.get_clients is the current API (buf_get_clients is deprecated/removed)
+	local attached = vim.lsp.get_clients({ bufnr = buf })
+
+	for _, client in ipairs(attached) do
+		table.insert(clients, {
+			name = client.name,
+			id = client.id,
+			capabilities = client.server_capabilities or {},
+			root_dir = client.config and client.config.root_dir or nil,
+		})
 	end
 
-	if ok and buf_clients then
-		for _, client in pairs(buf_clients) do
-			if client.name then
-				table.insert(clients, {
-					name = client.name,
-					id = client.id,
-					capabilities = client.server_capabilities or {},
-				})
-			end
-		end
-	end
-
-	cache.lsp_clients = clients
-	update_cache_time("lsp_clients")
+	set_cache("lsp_clients", clients)
 	return clients
 end
 
----Query LSP for document symbols asynchronously
----@param callback function
+------------------------------------------------------------------------------
+-- LSP Document Symbols (async)
+------------------------------------------------------------------------------
+---Asynchronously fetch document symbols via LSP
+---@param callback fun(symbols: table[])
 function M.get_lsp_symbols(callback)
-	if is_cache_valid("lsp_symbols") and #cache.lsp_symbols > 0 then
-		callback(cache.lsp_symbols)
+	local cached = get_cache("lsp_symbols")
+	if cached then
+		callback(cached)
 		return
 	end
 
 	local buf = vim.api.nvim_get_current_buf()
-	local params = { textDocument = vim.lsp.util.make_text_document_params() }
+	local params = { textDocument = vim.lsp.util.make_text_document_params(buf) }
 
 	vim.lsp.buf_request(buf, "textDocument/documentSymbol", params, function(err, result)
-		if err or not result then
+		if err then
+			vim.notify("LSP documentSymbol error: " .. vim.inspect(err), vim.log.levels.ERROR)
+			callback({})
+			return
+		end
+
+		if not result or vim.tbl_isempty(result) then
+			set_cache("lsp_symbols", {})
 			callback({})
 			return
 		end
 
 		local symbols = {}
-		local function extract_symbols(items, prefix)
+
+		---Recursively extract symbols from hierarchical or flat response
+		---@param items table[]
+		---@param prefix string?
+		local function extract(items, prefix)
 			prefix = prefix or ""
 			for _, item in ipairs(items or {}) do
-				local symbol = item.name or item.text
-				if symbol then
+				local name = item.name or item.text
+				if name then
 					table.insert(symbols, {
-						name = symbol,
+						name = name,
 						kind = vim.lsp.protocol.SymbolKind[item.kind] or "Unknown",
 						location = item.location or item.range,
 						prefix = prefix,
 					})
 
-					-- Recursively extract children
 					if item.children then
-						extract_symbols(item.children, prefix .. symbol .. ".")
+						extract(item.children, prefix .. name .. ".")
 					end
 				end
 			end
 		end
 
-		extract_symbols(result)
-		cache.lsp_symbols = symbols
-		update_cache_time("lsp_symbols")
+		-- Handle both hierarchical and flat responses
+		if result[1] and result[1].children then
+			extract(result)
+		else
+			extract(result)
+		end
+
+		set_cache("lsp_symbols", symbols)
 		callback(symbols)
 	end)
 end
 
----Get workspace symbols via LSP
----@param query string
----@param callback function
+------------------------------------------------------------------------------
+-- Workspace Symbols (async)
+------------------------------------------------------------------------------
+---@param query string?
+---@param callback fun(symbols: table[])
 function M.get_workspace_symbols(query, callback)
-	local params = { query = query or "" }
+	query = query or ""
 
+	local params = { query = query }
 	vim.lsp.buf_request(0, "workspace/symbol", params, function(err, result)
-		if err or not result then
+		if err then
+			vim.notify("LSP workspace/symbol error: " .. vim.inspect(err), vim.log.levels.ERROR)
 			callback({})
 			return
 		end
 
 		local symbols = {}
-		for _, item in ipairs(result) do
+		for _, item in ipairs(result or {}) do
 			table.insert(symbols, {
-				name = item.name,
+				name = item.name or "unknown",
 				kind = vim.lsp.protocol.SymbolKind[item.kind] or "Unknown",
 				location = item.location,
 				container = item.containerName,
 			})
 		end
-
 		callback(symbols)
 	end)
 end
 
----Get available buffers with metadata
----@return table[] buffers
+------------------------------------------------------------------------------
+-- Buffers List
+------------------------------------------------------------------------------
+---Get list of loaded, named, normal buffers
+---@return table[]
 function M.get_buffers()
-	if is_cache_valid("buffers") and cache.buffers then
-		return cache.buffers
+	local cached = get_cache("buffers")
+	if cached then
+		return cached
 	end
 
-	local buffers = {}
+	local list = {}
 	local current_buf = vim.api.nvim_get_current_buf()
 
-	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_loaded(buf) then
-			local name = vim.api.nvim_buf_get_name(buf)
-			local buftype = vim.bo[buf].buftype
-			local modified = vim.bo[buf].modified
-
-			if name ~= "" and buftype == "" then
-				local short_name = vim.fn.fnamemodify(name, ":t")
-				local path = vim.fn.fnamemodify(name, ":~:.")
-
-				table.insert(buffers, {
-					bufnr = buf,
-					name = short_name,
-					path = path,
-					full_path = name,
-					modified = modified,
-					current = buf == current_buf,
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_loaded(bufnr) then
+			local name = vim.api.nvim_buf_get_name(bufnr)
+			if name ~= "" and vim.bo[bufnr].buftype == "" then
+				table.insert(list, {
+					bufnr = bufnr,
+					name = vim.fn.fnamemodify(name, ":t"),
+					path = vim.fn.fnamemodify(name, ":~:."),
+					full = name,
+					modified = vim.bo[bufnr].modified,
+					current = bufnr == current_buf,
 				})
 			end
 		end
 	end
 
-	-- Sort: current first, then modified, then alphabetically
-	table.sort(buffers, function(a, b)
+	-- Sort: current first, then modified, then name
+	table.sort(list, function(a, b)
 		if a.current ~= b.current then
 			return a.current
 		end
@@ -194,71 +247,143 @@ function M.get_buffers()
 		return a.name < b.name
 	end)
 
-	cache.buffers = buffers
-	update_cache_time("buffers")
-	return buffers
+	set_cache("buffers", list)
+	return list
 end
 
----Get git status asynchronously
----@param callback function
+------------------------------------------------------------------------------
+-- Git Status (async)
+------------------------------------------------------------------------------
+---@param callback fun(status: table)
 function M.get_git_status(callback)
-	if is_cache_valid("git_status") and cache.git_status then
-		callback(cache.git_status)
+	local cached = get_cache("git_status")
+	if cached then
+		callback(cached)
 		return
 	end
 
-	-- Check if we're in a git repo
-	local git_dir = vim.fn.finddir(".git", vim.fn.getcwd() .. ";")
-	if git_dir == "" then
+	local cwd = vim.fn.getcwd()
+	if not vim.uv.fs_stat(cwd .. "/.git") then
+		-- Not a git repo
+		set_cache("git_status", {})
 		callback({})
 		return
 	end
 
-	-- Run git status asynchronously
-	local stdout = vim.uv.new_pipe()
-	local handle
+	local stdout = vim.loop.new_pipe()
 	local output = {}
+	local handle
 
-	handle = vim.uv.spawn("git", {
+	handle = vim.loop.spawn("git", {
 		args = { "status", "--porcelain=v1", "--untracked-files=all" },
+		cwd = cwd,
 		stdio = { nil, stdout, nil },
 	}, function(code)
-		stdout:close()
-		handle:close()
+		if stdout then
+			stdout:close()
+		end
+		if handle then
+			handle:close()
+		end
 
-		if code == 0 then
-			local status = {
-				modified = {},
-				added = {},
-				deleted = {},
-				untracked = {},
-			}
+		if code ~= 0 then
+			callback({})
+			return
+		end
 
-			for _, line in ipairs(output) do
-				local state, file = line:match("^(..)%s+(.+)$")
-				if state and file then
-					if state:match("M") then
-						table.insert(status.modified, file)
-					elseif state:match("A") then
-						table.insert(status.added, file)
-					elseif state:match("D") then
-						table.insert(status.deleted, file)
-					elseif state:match("%?") then
-						table.insert(status.untracked, file)
-					end
+		local status = { modified = {}, added = {}, deleted = {}, untracked = {} }
+
+		for _, line in ipairs(output) do
+			local state, file = line:match("^(..)%s+(.+)$")
+			if state and file then
+				-- XY format: X = index, Y = worktree
+				if state:match("M") or state:match("T") then
+					table.insert(status.modified, file)
+				elseif state:match("A") then
+					table.insert(status.added, file)
+				elseif state:match("D") then
+					table.insert(status.deleted, file)
+				elseif state:match("%?%?") then
+					table.insert(status.untracked, file)
 				end
 			end
+		end
 
-			cache.git_status = status
-			update_cache_time("git_status")
-			callback(status)
+		set_cache("git_status", status)
+		callback(status)
+	end)
+
+	if not handle then
+		callback({})
+		return
+	end
+
+	stdout:read_start(function(_, data)
+		if data then
+			for line in data:gmatch("[^\r\n]+") do
+				table.insert(output, line)
+			end
+		end
+	end)
+end
+
+------------------------------------------------------------------------------
+-- Filetype Context
+------------------------------------------------------------------------------
+---@return table
+function M.get_filetype_context()
+	local buf = vim.api.nvim_get_current_buf()
+	local ok, lang = pcall(vim.treesitter.language.get_lang, vim.bo[buf].filetype)
+	return {
+		filetype = vim.bo[buf].filetype,
+		syntax = vim.bo[buf].syntax,
+		ts_lang = ok and lang or nil,
+	}
+end
+
+------------------------------------------------------------------------------
+-- Project Files (async)
+------------------------------------------------------------------------------
+---@param callback fun(files: string[])
+function M.get_project_files(callback)
+	local cached = get_cache("project_files")
+	if cached then
+		callback(cached)
+		return
+	end
+
+	local cwd = vim.fn.getcwd()
+
+	local function on_exit(files, code)
+		if code == 0 then
+			set_cache("project_files", files)
+			callback(files)
 		else
 			callback({})
 		end
-	end)
+	end
 
-	if stdout then
-		stdout:read_start(function(err, data)
+	local function spawn(cmd, args)
+		local stdout = vim.loop.new_pipe()
+		local output = {}
+		local handle = vim.loop.spawn(cmd, {
+			args = args,
+			cwd = cwd,
+			stdio = { nil, stdout, nil },
+		}, function(code)
+			stdout:close()
+			if handle then
+				handle:close()
+			end
+			on_exit(output, code)
+		end)
+
+		if not handle then
+			callback({})
+			return
+		end
+
+		stdout:read_start(function(_, data)
 			if data then
 				for line in data:gmatch("[^\r\n]+") do
 					table.insert(output, line)
@@ -266,143 +391,63 @@ function M.get_git_status(callback)
 			end
 		end)
 	end
-end
 
----Get file type and language context
----@return table context
-function M.get_filetype_context()
-	local buf = vim.api.nvim_get_current_buf()
-	return {
-		filetype = vim.bo[buf].filetype,
-		syntax = vim.bo[buf].syntax,
-		language = vim.treesitter.language.get_lang(vim.bo[buf].filetype),
-	}
-end
-
----Get project files using various methods
----@param callback function
-function M.get_project_files(callback)
-	local files = {}
-
-	-- Try ripgrep first (fastest)
-	local has_rg = vim.fn.executable("rg") == 1
-	if has_rg then
-		local stdout = vim.uv.new_pipe()
-		local handle
-		local output = {}
-
-		handle = vim.uv.spawn("rg", {
-			args = { "--files", "--hidden", "--no-ignore-vcs" },
-			cwd = vim.fn.getcwd(),
-			stdio = { nil, stdout, nil },
-		}, function(code)
-			stdout:close()
-			handle:close()
-
-			if code == 0 then
-				for _, file in ipairs(output) do
-					table.insert(files, file)
-				end
-			end
-			callback(files)
-		end)
-
-		if stdout then
-			stdout:read_start(function(err, data)
-				if data then
-					for line in data:gmatch("[^\r\n]+") do
-						table.insert(output, line)
-					end
-				end
-			end)
-		end
+	if vim.fn.executable("rg") == 1 then
+		spawn("rg", { "--files", "--hidden", "--no-ignore-vcs" })
 		return
 	end
 
-	-- Fallback to fd
-	local has_fd = vim.fn.executable("fd") == 1
-	if has_fd then
-		local stdout = vim.uv.new_pipe()
-		local handle
-		local output = {}
-
-		handle = vim.uv.spawn("fd", {
-			args = { "--type", "f", "--hidden" },
-			cwd = vim.fn.getcwd(),
-			stdio = { nil, stdout, nil },
-		}, function(code)
-			stdout:close()
-			handle:close()
-
-			if code == 0 then
-				for _, file in ipairs(output) do
-					table.insert(files, file)
-				end
-			end
-			callback(files)
-		end)
-
-		if stdout then
-			stdout:read_start(function(err, data)
-				if data then
-					for line in data:gmatch("[^\r\n]+") do
-						table.insert(output, line)
-					end
-				end
-			end)
-		end
+	if vim.fn.executable("fd") == 1 then
+		spawn("fd", { "--type", "f", "--hidden", "--exclude", ".git" })
 		return
 	end
 
-	-- Last resort: use Vim's glob
+	-- Fallback: glob (slower, but works)
 	vim.schedule(function()
-		local glob_files = vim.fn.glob("**/*", false, true)
-		for _, file in ipairs(glob_files) do
-			if vim.fn.isdirectory(file) == 0 then
-				table.insert(files, file)
+		local files = vim.fn.globpath(cwd, "**/*", false, true)
+		local filtered = {}
+		for _, f in ipairs(files) do
+			if vim.fn.isdirectory(f) == 0 then
+				-- Make relative to cwd
+				table.insert(filtered, vim.fn.fnamemodify(f, ":.:"))
 			end
 		end
-		callback(files)
+		set_cache("project_files", filtered)
+		callback(filtered)
 	end)
 end
 
----Infer intent from partial command input
+------------------------------------------------------------------------------
+-- Command Intent Inference
+------------------------------------------------------------------------------
 ---@param text string
----@return table intent
+---@return table
 function M.infer_intent(text)
+	if not text or type(text) ~= "string" then
+		return { type = "unknown", context = {}, suggestions = {} }
+	end
+
+	local lower = text:lower()
 	local intent = {
 		type = "unknown",
 		context = {},
 		suggestions = {},
 	}
 
-	-- File operations
-	if text:match("^e%s") or text:match("^edit%s") or text:match("^tabe%s") then
+	if lower:match("^e%d*$") or lower:match("^edit") then
 		intent.type = "file_edit"
 		intent.context.needs_files = true
-	elseif text:match("^w%s") or text:match("^write%s") then
+	elseif lower:match("^w%d*$") or lower:match("^write") then
 		intent.type = "file_write"
-	elseif text:match("^b%s") or text:match("^buffer%s") then
+	elseif lower:match("^b%d*$") or lower:match("^buffer") then
 		intent.type = "buffer_switch"
 		intent.context.needs_buffers = true
-	elseif text:match("^bd%s") or text:match("^bdelete%s") then
-		intent.type = "buffer_delete"
-		intent.context.needs_buffers = true
-	-- Search operations
-	elseif text:match("^%/%s") or text:match("^%?%s") then
-		intent.type = "search"
-		intent.context.needs_patterns = true
-	-- LSP operations
-	elseif text:match("symbol") or text:match("definition") or text:match("reference") then
+	elseif lower:match("symbol") or lower:match("definition") or lower:match("reference") then
 		intent.type = "lsp_query"
 		intent.context.needs_lsp = true
-	-- Git operations
-	elseif text:match("^Git") or text:match("^G%s") then
+	elseif lower:match("^g%s") or lower:match("^git") then
 		intent.type = "git_command"
 		intent.context.needs_git = true
-	-- Help
-	elseif text:match("^h%s") or text:match("^help%s") then
-		intent.type = "help"
 	end
 
 	return intent

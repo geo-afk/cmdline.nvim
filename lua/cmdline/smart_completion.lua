@@ -1,17 +1,10 @@
--- Enhanced completion module with context-aware suggestions
--- Integrates LSP, Telescope, and Tree-sitter for intelligent completions
-
 local M = {}
 local State = require("cmdline.state")
 local Context = require("cmdline.context")
 local Telescope = require("cmdline.telescope_integration")
 local TreeSitter = require("cmdline.treesitter_parser")
-local config
 
----Setup smart completion
----@param cfg table
-function M.setup(cfg)
-	config = cfg
+function M.setup()
 	Context.setup()
 	Telescope.setup()
 	TreeSitter.setup()

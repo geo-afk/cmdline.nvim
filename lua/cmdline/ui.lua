@@ -1,4 +1,3 @@
--- ui.lua - Fixed version with proper rendering
 local M = {}
 local State = require("cmdline.state")
 local config

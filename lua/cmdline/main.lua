@@ -32,9 +32,9 @@ local defaults = {
 	},
 	icons = {
 		cmdline = "❯ ",
-		search = " ",
-		search_up = " ",
-		lua = " ",
+		search = " ", -- Nerd Font magnifying glass
+		search_up = " ", -- same but you could use a different one
+		lua = " ",
 	},
 	theme = {
 		bg = "#1e1e2e",
@@ -720,8 +720,8 @@ function M.close()
 end
 
 --- Setup the module with configuration.
--- @param opts table|nil User configuration to override defaults.
--- @return table The module table.
+---@param opts table|nil User configuration to override defaults.
+---@return table The module table.
 function M.setup(opts)
 	-- Merge config
 	M.config = vim.tbl_deep_extend("force", defaults, opts or {})

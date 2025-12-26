@@ -1,6 +1,3 @@
--- Completion system module with intelligent context-aware suggestions
--- Integrates with LSP, Telescope, and Tree-sitter
-
 local M = {}
 local State = require("cmdline.state")
 local UI = require("cmdline.ui")
@@ -9,23 +6,21 @@ local timer = nil
 
 -- Lazy-load smart completion modules
 local SmartCompletion
-local Context
-local Telescope
-local TreeSitter
 
 ---Setup completion module
 ---@param cfg table
 function M.setup(cfg)
 	config = cfg
 
-	-- Lazy-load modules only if needed
+	-- Always try to load smart completion first
 	if config.completion.smart_enabled then
 		local ok, smart = pcall(require, "cmdline.smart_completion")
 		if ok then
 			SmartCompletion = smart
-			SmartCompletion.setup(cfg)
+			SmartCompletion.setup()
 		else
 			vim.notify("Smart completion modules not found. Using basic completion.", vim.log.levels.WARN)
+			config.completion.smart_enabled = false
 		end
 	end
 end
@@ -81,21 +76,28 @@ function M:clear()
 	UI:render()
 end
 
----Get completions based on current state
+---Get completions based on current state - PRIORITIZE SMART COMPLETION
 function M:get_completions()
-	-- Try smart completion first if enabled
+	-- PRIORITY: Try smart completion first if enabled
 	if config.completion.smart_enabled and SmartCompletion then
 		SmartCompletion.get_smart_completions(function(items)
-			self:finalize_completions(items)
+			-- If smart completion returns results, use them
+			if items and #items > 0 then
+				self:finalize_completions(items)
+			else
+				-- Fall back to basic completion only if smart returns nothing
+				local basic_items = self:get_basic_completions()
+				self:finalize_completions(basic_items)
+			end
 		end)
 	else
-		-- Fall back to basic completion
+		-- Fall back to basic completion if smart is disabled
 		local items = self:get_basic_completions()
 		self:finalize_completions(items)
 	end
 end
 
----Get basic completions (original implementation)
+---Get basic completions (fallback implementation)
 ---@return table[] items
 function M:get_basic_completions()
 	local items = {}
@@ -112,6 +114,10 @@ end
 ---Finalize and display completions
 ---@param items table[]
 function M:finalize_completions(items)
+	if not items then
+		items = {}
+	end
+
 	-- Score and sort items
 	self:score_items(items)
 	table.sort(items, function(a, b)
@@ -146,10 +152,10 @@ function M:get_cmdline_completions()
 		end
 	end
 
-	-- History
+	-- History (limit to 5)
 	local history = State:get_history()
-	local max_history = math.min(#history, 5) -- FIX: Reduce from 10 to 5 to lighten load
-	for i = #history, math.max(1, #history - max_history + 1), -1 do
+	local max_history = math.min(#history, 5)
+	for i = 1, max_history do
 		local hist = history[i]
 		if hist and hist ~= "" and hist ~= text then
 			-- Check if not duplicate
@@ -194,7 +200,7 @@ function M:get_search_completions()
 	-- Search history (only if text is empty or matches)
 	local history = State:get_history()
 	local max_history = math.min(#history, 8)
-	for i = #history, math.max(1, #history - max_history + 1), -1 do
+	for i = 1, max_history do
 		local hist = history[i]
 		if hist and hist ~= "" and hist ~= State.text then
 			local hist_lower = hist:lower()
@@ -216,7 +222,7 @@ end
 function M:score_items(items)
 	local query = State.text:lower()
 
-	-- FIX: Pre-limit to avoid scoring too many (e.g., all commands on empty prefix)
+	-- Pre-limit to avoid scoring too many items
 	if #items > 500 then
 		items = vim.list_slice(items, 1, 500)
 	end
@@ -226,7 +232,7 @@ function M:score_items(items)
 		local text = item.text:lower()
 
 		if query == "" then
-		-- Keep priority score
+			-- Keep priority score
 		elseif text == query then
 			-- Exact match
 			score = score + 300

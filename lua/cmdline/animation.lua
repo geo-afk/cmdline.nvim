@@ -29,7 +29,6 @@ function Animation:stop_timer(id)
 	self.timers[id] = nil
 end
 
--- Helper for cubic easing (inspired by Noice's smooth fades/slides)
 local function ease_out_cubic(t)
 	return 1 - math.pow(1 - t, 3)
 end

@@ -1,10 +1,6 @@
--- Telescope integration for enhanced fuzzy finding and previews
--- Falls back gracefully when Telescope is not available
-
 local M = {}
 local Context = require("cmdline.context")
 
--- Check if Telescope is available
 local has_telescope, _ = pcall(require, "telescope")
 local has_builtin, builtin = pcall(require, "telescope.builtin")
 local _, actions = pcall(require, "telescope.actions")
