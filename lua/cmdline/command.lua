@@ -1,7 +1,7 @@
 local M = {}
 local config = {}
 
--- Utility: trim whitespace (fallback, no dependency)
+-- Utility: trim whitespace
 local function trim(s)
 	if not s then
 		return ""
@@ -68,22 +68,24 @@ function M.execute_cmdline(cmd, context)
 		end
 	end
 
+	-- Execute the command
 	local ok, err = pcall(function()
-		-- Prepend range if present
 		if context and context.range then
-			-- If range is "start,end", use structured API:
-			vim.api.nvim_cmd({
-				cmd = "execute",
-				args = { context.range .. " " .. cmd },
-			}, {})
+			-- Execute with range
+			vim.cmd(context.range .. cmd)
 		else
-			-- Structured execution
-			vim.api.nvim_cmd({ cmd = "execute", args = { cmd } }, {})
+			-- Execute command directly
+			vim.cmd(cmd)
 		end
 	end)
 
 	if not ok then
-		local msg = tostring(err):gsub("^E%d+:%s*", "")
+		-- Clean up error message
+		local msg = tostring(err)
+		msg = msg:gsub("^Vim%([^%)]+%):", "")
+		msg = msg:gsub("^E%d+:%s*", "")
+		msg = trim(msg)
+
 		vim.schedule(function()
 			require("cmdline.messages").show(msg, "error")
 		end)
