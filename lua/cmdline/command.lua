@@ -1,7 +1,7 @@
 local M = {}
 local config = {}
 
--- Utility: trim whitespace
+-- Utility: trim whitespace (fallback, no dependency)
 local function trim(s)
 	if not s then
 		return ""
@@ -23,7 +23,6 @@ end
 ---@return string|nil error
 function M.execute(text, mode, context)
 	text = trim(text)
-
 	if text == "" then
 		return true, nil
 	end
@@ -50,7 +49,6 @@ function M.execute_cmdline(cmd, context)
 		local win = context and context.original_win or vim.api.nvim_get_current_win()
 		if win and vim.api.nvim_win_is_valid(win) then
 			local force = cmd:find("!") ~= nil
-
 			if cmd:match("^wq") or cmd:match("^x") or cmd:match("^ZZ") then
 				local buf = vim.api.nvim_win_get_buf(win)
 				if vim.bo[buf].modified then
@@ -62,30 +60,25 @@ function M.execute_cmdline(cmd, context)
 					end
 				end
 			end
-
 			pcall(vim.api.nvim_win_close, win, force)
 			return true, nil
 		end
 	end
 
-	-- Execute the command
 	local ok, err = pcall(function()
+		-- Prepend range if present
 		if context and context.range then
-			-- Execute with range
-			vim.cmd(context.range .. cmd)
+			vim.api.nvim_cmd({
+				cmd = "execute",
+				args = { context.range .. " " .. cmd },
+			}, {})
 		else
-			-- Execute command directly
-			vim.cmd(cmd)
+			vim.api.nvim_cmd({ cmd = "execute", args = { cmd } }, {})
 		end
 	end)
 
 	if not ok then
-		-- Clean up error message
-		local msg = tostring(err)
-		msg = msg:gsub("^Vim%([^%)]+%):", "")
-		msg = msg:gsub("^E%d+:%s*", "")
-		msg = trim(msg)
-
+		local msg = tostring(err):gsub("^E%d+:%s*", "")
 		vim.schedule(function()
 			require("cmdline.messages").show(msg, "error")
 		end)
@@ -130,7 +123,6 @@ end
 ---@return string|nil
 function M.execute_lua(expr)
 	expr = expr:gsub("^=", "")
-
 	local ok, result = pcall(function()
 		local chunk, load_err = load("return " .. expr, "@lua")
 		if not chunk then
@@ -148,7 +140,6 @@ function M.execute_lua(expr)
 
 	if result ~= nil then
 		vim.schedule(function()
-			-- Print or show result
 			require("cmdline.messages").show(vim.inspect(result), "info")
 		end)
 	end
@@ -162,7 +153,8 @@ end
 function M.is_quit_command(cmd)
 	cmd = trim(cmd)
 	-- Strip range if present
-	cmd = cmd:gsub("^%d+,%d+", "")
+	cmd = cmd:gsub("^%d+,%d+%s*", ""):gsub("^%s*", "")
+
 	local quit_patterns = {
 		"^q!?$",
 		"^quit!?$",
@@ -174,11 +166,13 @@ function M.is_quit_command(cmd)
 		"^ZQ$",
 		"^ZZ$",
 	}
+
 	for _, pat in ipairs(quit_patterns) do
 		if cmd:match(pat) then
 			return true
 		end
 	end
+
 	return false
 end
 
