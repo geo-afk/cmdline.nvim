@@ -1,41 +1,46 @@
--- Modified init.lua (enhanced animation for bottom)
 local M = {}
+
+local config
+local State
+local UI
+local Input
+local Completion
+local Command
+local Animation
 
 ---Setup the cmdline plugin
 ---@param opts table|nil User configuration
----@return table Module
 function M.setup(opts)
 	-- Load and merge config
 	local Config = require("cmdline.config")
-	local config = vim.tbl_deep_extend("force", Config.defaults, opts or {})
+	config = vim.tbl_deep_extend("force", Config.defaults, opts or {})
 
-	-- Initialize all modules with config
-	local State = require("cmdline.state")
-	local UI = require("cmdline.ui")
-	local Input = require("cmdline.input")
-	local Completion = require("cmdline.completion")
-	local Command = require("cmdline.command")
-	local Animation = require("cmdline.animation")
+	-- Require modules AFTER config is ready
+	State = require("cmdline.state")
+	UI = require("cmdline.ui")
+	Input = require("cmdline.input")
+	Completion = require("cmdline.completion")
+	Command = require("cmdline.command")
+	local anim_mod = require("cmdline.animation")
+	Animation = anim_mod.Animation
+	anim_mod.setup(config) -- setup animation with config
 
-	-- Setup animation first
-	Animation.setup(config)
-
-	-- Setup all modules
+	-- Setup modules
 	UI.setup(config)
 	Input.setup(config)
 	Completion.setup(config)
 	Command.setup(config)
 
-	-- Store config globally for other modules
+	-- Expose for external use
 	M.config = config
 	M.State = State
 	M.UI = UI
 	M.Input = Input
 	M.Completion = Completion
 	M.Command = Command
-	M.Animation = Animation.Animation
+	M.Animation = Animation
 
-	-- Create user commands
+	-- User commands and keymaps
 	vim.api.nvim_create_user_command("Cmdline", function(args)
 		local mode = args.args ~= "" and args.args or ":"
 		M.open(mode)
@@ -47,7 +52,6 @@ function M.setup(opts)
 		desc = "Open modern command line",
 	})
 
-	-- Setup default keymaps if enabled
 	if config.features.default_mappings then
 		vim.keymap.set("n", ":", function()
 			M.open(":")
@@ -75,7 +79,7 @@ function M.setup(opts)
 		end,
 	})
 
-	-- Add VimResized autocmd for re-render
+	-- Re-render on resize
 	vim.api.nvim_create_autocmd("VimResized", {
 		callback = function()
 			if State.active then
@@ -87,122 +91,96 @@ function M.setup(opts)
 	return M
 end
 
----Open cmdline in specified mode
----@param mode string Mode to open (":"|"/"|"?"|"=")
 function M.open(mode)
-	if M.State.active then
+	if State.active then
 		return
 	end
 
 	mode = mode or ":"
+	State:init(mode)
+	State.original_win = vim.api.nvim_get_current_win()
+	State.original_buf = vim.api.nvim_get_current_buf()
 
-	-- Initialize state
-	M.State:init(mode)
-	M.State.original_win = vim.api.nvim_get_current_win()
-	M.State.original_buf = vim.api.nvim_get_current_buf()
-
-	-- Handle visual range for command mode
 	if mode == ":" then
 		local vim_mode = vim.fn.mode()
 		if vim.tbl_contains({ "v", "V", "\22" }, vim_mode) then
-			M.State.text = "'<,'>"
-			M.State.cursor_pos = #M.State.text + 1
-			M.State.has_range = true
+			State.text = "'<,'>"
+			State.cursor_pos = #State.text + 1
+			State.has_range = true
 		end
 	end
 
-	-- Create UI
-	if not M.UI:create() then
+	if not UI:create() then
 		vim.notify("Failed to create cmdline window", vim.log.levels.ERROR)
 		return
 	end
 
-	-- Setup input handlers
-	M.Input:setup_buffer()
+	Input:setup_buffer()
+	UI:render()
 
-	-- Initial render
-	M.UI:render()
-
-	-- Animate window
-	if M.config.animation.enabled and M.Animation then
-		M.Animation:fade_in(M.State.win)
-		if M.config.window.position == "bottom" then
-			M.Animation:slide_in(M.State.win, "bottom")
+	if config.animation.enabled and Animation then
+		Animation:fade_in(State.win)
+		if config.window.position == "bottom" then
+			Animation:slide_in(State.win, "bottom")
 		else
-			M.Animation:scale_in(M.State.win) -- Fallback for other positions
+			Animation:scale_in(State.win)
 		end
 	end
 
-	-- Enter insert mode
 	vim.schedule(function()
-		if M.State.win and vim.api.nvim_win_is_valid(M.State.win) then
-			vim.api.nvim_set_current_win(M.State.win)
+		if State.win and vim.api.nvim_win_is_valid(State.win) then
+			vim.api.nvim_set_current_win(State.win)
 			vim.cmd("startinsert")
 		end
 	end)
 end
 
----Close cmdline
 function M.close()
-	if not M.State.active then
+	if not State.active then
 		return
 	end
 
-	-- Cleanup animation
-	if M.Animation then
-		M.Animation:cleanup()
+	if Animation then
+		Animation:cleanup()
+	end
+	if Completion then
+		Completion:cleanup()
+	end
+	UI:destroy()
+
+	if State.original_win and vim.api.nvim_win_is_valid(State.original_win) then
+		pcall(vim.api.nvim_set_current_win, State.original_win)
 	end
 
-	-- Cleanup completion
-	if M.Completion then
-		M.Completion:cleanup()
-	end
-
-	-- Destroy UI
-	M.UI:destroy()
-
-	-- Restore original window
-	if M.State.original_win and vim.api.nvim_win_is_valid(M.State.original_win) then
-		pcall(vim.api.nvim_set_current_win, M.State.original_win)
-	end
-
-	-- Reset state
-	M.State:reset()
-
-	-- Exit insert mode
+	State:reset()
 	vim.cmd("stopinsert")
 end
 
----Execute current command
 function M.execute()
-	if not M.State.active then
+	if not State.active then
 		return
 	end
 
-	local text = vim.trim(M.State.text)
+	local text = vim.trim(State.text)
 	if text == "" then
 		M.close()
 		return
 	end
 
-	-- Add to history
-	M.State:add_to_history(text)
+	State:add_to_history(text)
 
-	-- Store context for execution
 	local context = {
-		mode = M.State.mode,
+		mode = State.mode,
 		text = text,
-		original_win = M.State.original_win,
-		original_buf = M.State.original_buf,
-		range = M.State.has_range and "'<,'>" or nil,
+		original_win = State.original_win,
+		original_buf = State.original_buf,
+		range = State.has_range and "'<,'>" or nil,
 	}
 
-	-- Close UI first
 	M.close()
 
-	-- Execute after closing
 	vim.schedule(function()
-		local success, err = M.Command.execute(context.text, context.mode, context)
+		local success, err = Command.execute(context.text, context.mode, context)
 		if not success and err then
 			vim.notify(err, vim.log.levels.ERROR)
 		end

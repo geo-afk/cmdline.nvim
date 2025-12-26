@@ -1,78 +1,60 @@
--- Modified config.lua (add or adjust defaults for better bottom UI)
 local M = {}
 
 M.defaults = {
 	-- Window configuration
 	window = {
 		relative = "editor",
-		position = "bottom", -- Changed to "bottom" for bottom positioning
-		width = 0.9, -- Wider for bottom bar feel
+		position = "bottom", -- Now bottom by default
+		width = 0.9,
 		height = 1,
 		max_height = 15,
-		border = "single", -- Simpler border for bottom bar
+		border = "single",
 		zindex = 50,
-		title = "", -- No title for cleaner look
+		title = "",
 		title_pos = nil,
-		blend = 0, -- No transparency for solid bar
+		blend = 0,
 	},
 
-	-- Animation settings for smoother UI transitions
+	-- Animation settings
 	animation = {
 		enabled = true,
-		duration = 150, -- Shorter duration
-		slide_distance = 5, -- Subtle slide
+		duration = 150,
+		slide_distance = 5,
 	},
 
-	-- Theme - Catppuccin Mocha inspired (popular modern theme)
+	-- Theme (Catppuccin Mocha inspired)
 	theme = {
-		-- Background and foreground
 		bg = "#1e1e2e",
 		fg = "#cdd6f4",
-
-		-- Borders
 		border_fg = "#89b4fa",
 		border_bg = nil,
-
-		-- Prompt area
 		prompt_bg = "#1e1e2e",
 		prompt_fg = "#89b4fa",
 		prompt_icon_fg = "#f9e2af",
-
-		-- Cursor
 		cursor_bg = "#f38ba8",
 		cursor_fg = "#1e1e2e",
-
-		-- Selection
 		selection_bg = "#45475a",
 		selection_fg = "#cdd6f4",
-
-		-- Completion items
 		item_fg = "#cdd6f4",
 		item_kind_fg = "#89b4fa",
 		item_desc_fg = "#6c7086",
-
-		-- Headers and groups
 		header_fg = "#cba6f7",
 		header_bg = "#313244",
 		separator_fg = "#45475a",
-
-		-- States
 		hint_fg = "#6c7086",
 		error_fg = "#f38ba8",
 		success_fg = "#a6e3a1",
 	},
 
-	-- Icons (Nerd Font required) - Based on Noice.nvim and modern standards
+	-- Icons
 	icons = {
-		-- Mode icons
-		cmdline = "󰘳 ", -- command palette
+		cmdline = "󰘳 ",
 		search = "󰍉 ",
 		search_up = "󰍞 ",
-		filter = "󰈲 ", -- funnel (upgrade from "$")
+		filter = "󰈲 ",
 		lua = "󰢱 ",
 		help = "󰋖 ",
 
-		-- Completion kinds (cmdline / menu)
 		Command = "󰘳 ",
 		Function = "󰊕 ",
 		Variable = "󰀫 ",
@@ -83,14 +65,14 @@ M.defaults = {
 		Word = "󰊄 ",
 		Help = "󰋖 ",
 
-		-- LSP kinds (VS Code / lspkind compatible)
+		-- LSP kinds
 		Text = "󰉿 ",
 		Method = "󰆧 ",
 		Module = "󰕳 ",
 		Class = "󰠱 ",
 		Property = "󰜢 ",
 		Field = "󰜢 ",
-		Constructor = "󰆴 ", -- added
+		Constructor = "󰆴 ",
 		Enum = "󰕘 ",
 		Interface = "󰜰 ",
 		Keyword = "󰌋 ",
@@ -98,7 +80,7 @@ M.defaults = {
 		Color = "󰏘 ",
 		Reference = "󰈇 ",
 		Folder = "󰉋 ",
-		EnumMember = "󰎠 ", -- added
+		EnumMember = "󰎠 ",
 		Constant = "󰏿 ",
 		Struct = "󰙅 ",
 		Event = "󰉁 ",
@@ -107,30 +89,30 @@ M.defaults = {
 		Unit = "󰑭 ",
 		Value = "󰎠 ",
 
-		-- Git kinds
+		-- Git
 		Modified = "󰏫 ",
 		Added = "󰐕 ",
 		Deleted = "󰍴 ",
 		Untracked = "󰎔 ",
-		Rena...(truncated 315 characters)...
+
+		more = "…",
+	},
+
+	-- Completion
 	completion = {
 		enabled = true,
 		auto_trigger = true,
-		trigger_delay = 50, -- milliseconds
+		trigger_delay = 50,
 		fuzzy = true,
 		max_items = 40,
 		max_items_per_group = 8,
 		show_kind = true,
 		show_desc = true,
 		auto_select = false,
-
-		-- Smart completion features
 		smart_enabled = true,
 		lsp_enabled = true,
 		telescope_enabled = true,
 		treesitter_enabled = true,
-
-		-- Sources in priority order
 		sources = {
 			{ name = "cmdline", priority = 100 },
 			{ name = "lsp", priority = 110, enabled = true },
@@ -142,7 +124,7 @@ M.defaults = {
 		},
 	},
 
-	-- Feature flags
+	-- Features
 	features = {
 		default_mappings = true,
 		smart_quit = true,
@@ -154,42 +136,29 @@ M.defaults = {
 		telescope_picker = true,
 	},
 
-	-- Custom keymaps
+	-- Keymaps
 	keymaps = {
-		-- Editing
 		backspace = "<BS>",
 		delete_word = "<C-w>",
 		delete_line = "<C-u>",
-
-		-- Movement
 		move_left = "<C-b>",
 		move_right = "<C-f>",
 		move_home = "<C-a>",
 		move_end = "<C-e>",
-
-		-- History
 		history_prev = "<C-p>",
 		history_next = "<C-n>",
-
-		-- Completion
 		complete_next = "<Tab>",
 		complete_prev = "<S-Tab>",
 		complete_select = "<CR>",
-		telescope_picker = "<C-Space>", -- Show Telescope enhanced picker
-
-		-- Undo/Redo
+		telescope_picker = "<C-Space>",
 		undo = "<C-z>",
 		redo = "<C-y>",
-
-		-- Execution
 		execute = "<CR>",
 		close = { "<Esc>", "<C-c>" },
-
-		-- Paste
 		paste = "<C-r>",
 	},
 
-	-- LSP integration settings
+	-- LSP
 	lsp = {
 		enabled = true,
 		symbol_kinds = {
@@ -212,7 +181,7 @@ M.defaults = {
 		debounce_ms = 100,
 	},
 
-	-- Telescope integration settings
+	-- Telescope
 	telescope = {
 		enabled = true,
 		preview = true,
@@ -224,7 +193,7 @@ M.defaults = {
 		},
 	},
 
-	-- Tree-sitter settings
+	-- Treesitter
 	treesitter = {
 		enabled = true,
 		highlight = true,
