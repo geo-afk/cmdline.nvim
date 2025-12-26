@@ -162,8 +162,8 @@ function M:render()
 		prompt_line = prompt_line .. hint
 		table.insert(highlights, {
 			line = 0,
-			col = vim.fn.strwidth(icon),
-			end_col = vim.fn.strwidth(prompt_line),
+			col = #icon,
+			end_col = #prompt_line,
 			hl_group = "CmdlineHint",
 		})
 	end
@@ -174,7 +174,7 @@ function M:render()
 	table.insert(highlights, {
 		line = 0,
 		col = 0,
-		end_col = vim.fn.strwidth(icon),
+		end_col = #icon,
 		hl_group = "CmdlinePromptIcon",
 	})
 
@@ -182,8 +182,8 @@ function M:render()
 	if State.text ~= "" then
 		table.insert(highlights, {
 			line = 0,
-			col = vim.fn.strwidth(icon),
-			end_col = vim.fn.strwidth(icon .. State.text),
+			col = #icon,
+			end_col = #icon + #State.text,
 			hl_group = "CmdlinePrompt",
 		})
 	end
@@ -194,24 +194,25 @@ function M:render()
 		for _, hl in ipairs(syntax_hl) do
 			table.insert(highlights, {
 				line = 0,
-				col = vim.fn.strwidth(icon) + hl.col_start,
-				end_col = vim.fn.strwidth(icon) + hl.col_end,
+				col = #icon + hl.col_start,
+				end_col = #icon + hl.col_end,
 				hl_group = "Cmdline" .. hl.group,
 			})
 		end
 	end
 
 	-- Cursor highlight (overlay on top)
-	local cursor_col = vim.fn.strwidth(icon) + vim.fn.strwidth(State.text:sub(1, State.cursor_pos - 1))
+	local text_before_cursor = State.text:sub(1, State.cursor_pos - 1)
+	local cursor_col = #icon + #text_before_cursor
 	local cursor_char = State.text:sub(State.cursor_pos, State.cursor_pos)
-	local cursor_width = cursor_char ~= "" and vim.fn.strwidth(cursor_char) or 1
+	local cursor_width = cursor_char ~= "" and #cursor_char or 1
 
 	table.insert(highlights, {
 		line = 0,
 		col = cursor_col,
 		end_col = cursor_col + cursor_width,
 		hl_group = "CmdlineCursor",
-		priority = 200, -- Higher priority so it shows on top
+		priority = 200,
 	})
 
 	-- Completions section
@@ -248,29 +249,29 @@ function M:render()
 				table.insert(highlights, {
 					line = line_idx,
 					col = 0,
-					end_col = vim.fn.strwidth(line_text),
+					end_col = #line_text,
 					hl_group = "CmdlineSelection",
 				})
 			end
 
 			-- Kind highlight
 			if kind_str ~= "" then
-				local start = vim.fn.strwidth(prefix .. item.text)
+				local start = #prefix + #item.text
 				table.insert(highlights, {
 					line = line_idx,
 					col = start,
-					end_col = start + vim.fn.strwidth(kind_str),
+					end_col = start + #kind_str,
 					hl_group = "CmdlineItemKind",
 				})
 			end
 
 			-- Description highlight
 			if desc_str ~= "" then
-				local start = vim.fn.strwidth(prefix .. item.text .. kind_str)
+				local start = #prefix + #item.text + #kind_str
 				table.insert(highlights, {
 					line = line_idx,
 					col = start,
-					end_col = start + vim.fn.strwidth(desc_str),
+					end_col = start + #desc_str,
 					hl_group = "CmdlineItemDesc",
 				})
 			end
@@ -283,7 +284,7 @@ function M:render()
 			table.insert(highlights, {
 				line = #lines - 1,
 				col = 0,
-				end_col = vim.fn.strwidth(more),
+				end_col = #more,
 				hl_group = "CmdlineHint",
 			})
 		end
@@ -295,19 +296,23 @@ function M:render()
 	-- Clear old highlights
 	pcall(vim.api.nvim_buf_clear_namespace, State.buf, State.ns_id, 0, -1)
 
-	-- Apply highlights with proper byte indexing
+	-- Apply highlights - USE BYTE INDICES NOT DISPLAY WIDTH
 	for _, hl in ipairs(highlights) do
-		-- Convert display width to byte index for the line
-		local line_text = lines[hl.line + 1]
-		if line_text then
-			local byte_col = vim.str_byteindex(line_text, hl.col, true) or hl.col
-			local byte_end_col = vim.str_byteindex(line_text, hl.end_col, true) or hl.end_col
+		if hl.line < #lines then
+			local line_text = lines[hl.line + 1]
+			if line_text then
+				-- Clamp columns to valid byte range
+				local col = math.max(0, math.min(hl.col, #line_text))
+				local end_col = math.max(col, math.min(hl.end_col, #line_text))
 
-			pcall(vim.api.nvim_buf_set_extmark, State.buf, State.ns_id, hl.line, byte_col, {
-				end_col = byte_end_col,
-				hl_group = hl.hl_group,
-				priority = hl.priority or 100,
-			})
+				if col < end_col then
+					pcall(vim.api.nvim_buf_set_extmark, State.buf, State.ns_id, hl.line, col, {
+						end_col = end_col,
+						hl_group = hl.hl_group,
+						priority = hl.priority or 100,
+					})
+				end
+			end
 		end
 	end
 
@@ -321,7 +326,7 @@ function M:render()
 	end
 
 	-- Update cursor position in window
-	self:update_cursor(vim.fn.strwidth(icon))
+	self:update_cursor(#icon)
 
 	State.rendering = false
 end
@@ -332,9 +337,9 @@ function M:update_cursor(offset)
 		return
 	end
 
-	-- Calculate cursor position (display columns)
+	-- Calculate cursor position using byte length
 	local text_before_cursor = State.text:sub(1, State.cursor_pos - 1)
-	local col = offset + vim.fn.strwidth(text_before_cursor)
+	local col = offset + #text_before_cursor
 
 	pcall(vim.api.nvim_win_set_cursor, State.win, { 1, col })
 end
