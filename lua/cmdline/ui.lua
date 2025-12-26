@@ -157,7 +157,7 @@ function M:create()
 		pcall(vim.api.nvim_set_option_value, opt, val, { buf = State.buf })
 	end
 
-	-- Set empty prompt (we'll handle rendering ourselves)
+	-- Set empty prompt
 	pcall(vim.fn.prompt_setprompt, State.buf, "")
 
 	return true
@@ -168,9 +168,9 @@ function M:render()
 		return
 	end
 
-	-- Check if we need to render (simple hash to avoid unnecessary renders)
-	local current_hash = string.format("%s:%s:%d:%d", State.text, State.mode, State.cursor_pos, #State.completions)
-
+	-- Simple debouncing via hash
+	local current_hash =
+		string.format("%s:%s:%d:%d", State.text or "", State.mode or "", State.cursor_pos or 0, #State.completions)
 	if current_hash == last_render_hash then
 		return
 	end
@@ -186,12 +186,13 @@ function M:render()
 		local icon = M.get_mode_icon(State.mode)
 		local icon_spacing = string.rep(" ", config.ui.icon_spacing or 2)
 		local prompt_prefix = icon .. icon_spacing
+		local prompt_width = #prompt_prefix -- Explicitly define for safety
 
 		-- Build prompt line
-		local prompt_line = prompt_prefix .. State.text
+		local prompt_line = prompt_prefix .. (State.text or "")
 		table.insert(lines, prompt_line)
 
-		-- Highlight icon with proper width
+		-- Highlight icon
 		table.insert(highlights, {
 			line = 0,
 			col = 0,
@@ -202,12 +203,12 @@ function M:render()
 
 		-- Tree-sitter syntax highlighting
 		if TreeSitter and config.treesitter.highlight then
-			local ts_highlights = TreeSitter.get_highlights(State.text, State.mode)
+			local ts_highlights = TreeSitter.get_highlights(State.text or "", State.mode)
 			for _, h in ipairs(ts_highlights) do
 				table.insert(highlights, {
 					line = 0,
-					col = h.col_start + #prompt_prefix,
-					end_col = h.col_end + #prompt_prefix,
+					col = h.col_start + prompt_width,
+					end_col = h.col_end + prompt_width,
 					hl_group = h.group,
 					priority = 100,
 				})
@@ -215,7 +216,7 @@ function M:render()
 		end
 
 		-- Cursor highlight
-		local cursor_col = #prompt_prefix + State.cursor_pos - 1
+		local cursor_col = prompt_width + (State.cursor_pos or 1) - 1
 		table.insert(highlights, {
 			line = 0,
 			col = cursor_col,
@@ -224,23 +225,19 @@ function M:render()
 			priority = 200,
 		})
 
-		-- Render completions
+		-- Render completions if any
 		if #State.completions > 0 then
-			M.render_completions(lines, highlights, prompt_prefix)
+			M.render_completions(lines, highlights, prompt_width)
 		end
 
-		-- Apply lines
+		-- Apply lines and highlights
 		pcall(vim.api.nvim_buf_set_lines, State.buf, 0, -1, false, lines)
-
-		-- Apply highlights
 		pcall(vim.api.nvim_buf_clear_namespace, State.buf, State.ns_id, 0, -1)
 		M.apply_highlights(highlights, lines)
 
-		-- Update window size
+		-- Update window height and cursor
 		M.update_window_size(#lines)
-
-		-- Update cursor position
-		M.update_cursor(#prompt_prefix)
+		M.update_cursor(prompt_width)
 	end)
 
 	State.rendering = false
@@ -250,10 +247,10 @@ function M:render()
 	end
 end
 
-function M.render_completions(lines, highlights, prompt_prefix)
+function M.render_completions(lines, highlights, prompt_width)
 	local win_width = vim.api.nvim_win_get_width(State.win or 0)
 
-	-- Add separator
+	-- Separator
 	local sep_char = config.ui.separator_style == "thick" and "━"
 		or config.ui.separator_style == "dotted" and "┈"
 		or "─"
@@ -266,7 +263,7 @@ function M.render_completions(lines, highlights, prompt_prefix)
 		priority = 100,
 	})
 
-	-- Show completion stats if enabled
+	-- Optional stats
 	if config.features.show_stats then
 		local stats = string.format(" %d items ", #State.completions)
 		table.insert(lines, stats)
@@ -279,17 +276,14 @@ function M.render_completions(lines, highlights, prompt_prefix)
 		})
 	end
 
-	-- Render completion items
+	-- Render items
 	local max_items = config.completion.max_items or 10
 	local start_idx = 1
 	local end_idx = math.min(#State.completions, max_items)
 
-	-- If we have a selection, ensure it's visible
-	if State.completion_index > 0 then
-		if State.completion_index > max_items then
-			start_idx = State.completion_index - max_items + 1
-			end_idx = State.completion_index
-		end
+	if State.completion_index > 0 and State.completion_index > max_items then
+		start_idx = State.completion_index - max_items + 1
+		end_idx = State.completion_index
 	end
 
 	for i = start_idx, end_idx do
@@ -297,12 +291,10 @@ function M.render_completions(lines, highlights, prompt_prefix)
 		if not item then
 			break
 		end
-
-		local is_selected = i == State.completion_index
-		M.render_completion_item(lines, highlights, item, is_selected, win_width)
+		M.render_completion_item(lines, highlights, item, i == State.completion_index, win_width)
 	end
 
-	-- Show "more" indicator
+	-- "More" indicator
 	if #State.completions > max_items then
 		local more_text = string.format("  %s %d more...", icon_cache.more or "...", #State.completions - max_items)
 		table.insert(lines, more_text)
@@ -325,12 +317,10 @@ function M.render_completion_item(lines, highlights, item, is_selected, win_widt
 	table.insert(parts, selector)
 	col_tracker = #selector
 
-	-- Icon (if enabled and available)
+	-- Icon
 	if config.completion.show_icons and item.kind then
 		local icon = icon_cache[item.kind] or icon_cache.Text or "  "
 		table.insert(parts, icon)
-
-		-- Highlight icon
 		local icon_start = col_tracker
 		col_tracker = col_tracker + #icon
 		table.insert(highlights, {
@@ -344,15 +334,14 @@ function M.render_completion_item(lines, highlights, item, is_selected, win_widt
 
 	-- Main text
 	local text_start = col_tracker
-	table.insert(parts, item.text)
-	col_tracker = col_tracker + #item.text
+	table.insert(parts, item.text or "")
+	col_tracker = col_tracker + #(item.text or "")
 
-	-- Kind badge (if enabled)
+	-- Kind badge
 	if config.completion.show_kind and item.kind and config.completion.kind_format ~= "icon_only" then
 		local kind_text = config.completion.kind_format == "compact" and string.format(" [%s]", item.kind:sub(1, 1))
 			or string.format(" [%s]", item.kind)
 		table.insert(parts, kind_text)
-
 		local kind_start = col_tracker
 		col_tracker = col_tracker + #kind_text
 		table.insert(highlights, {
@@ -364,32 +353,29 @@ function M.render_completion_item(lines, highlights, item, is_selected, win_widt
 		})
 	end
 
-	-- Description (if enabled and available)
+	-- Description
 	if config.completion.show_desc and item.desc then
 		local desc_text = " " .. item.desc
-		-- Truncate if too long
-		local available_width = win_width - col_tracker - 2
-		if #desc_text > available_width then
-			desc_text = desc_text:sub(1, available_width - 3) .. "..."
+		local available = win_width - col_tracker - 2
+		if #desc_text > available then
+			desc_text = desc_text:sub(1, available - 3) .. "..."
 		end
 		table.insert(parts, desc_text)
-
 		local desc_start = col_tracker
-		col_tracker = col_tracker + #desc_text
 		table.insert(highlights, {
 			line = #lines,
 			col = desc_start,
-			end_col = col_tracker,
+			end_col = desc_start + #desc_text,
 			hl_group = "CmdlineItemDesc",
 			priority = 105,
 		})
 	end
 
-	-- Build final line
+	-- Final line
 	local line_text = table.concat(parts, "")
 	table.insert(lines, line_text)
 
-	-- Selection highlight (full line)
+	-- Selection background
 	if is_selected then
 		table.insert(highlights, {
 			line = #lines - 1,
@@ -400,11 +386,11 @@ function M.render_completion_item(lines, highlights, item, is_selected, win_widt
 		})
 	end
 
-	-- Highlight the main text
+	-- Main text highlight
 	table.insert(highlights, {
 		line = #lines - 1,
 		col = text_start,
-		end_col = text_start + #item.text,
+		end_col = text_start + #(item.text or ""),
 		hl_group = is_selected and "CmdlineSelection" or "CmdlineItem",
 		priority = 100,
 	})
@@ -418,57 +404,50 @@ function M.apply_highlights(highlights, lines)
 			local end_col = hl.end_col == -1 and #line_text or math.min(hl.end_col or #line_text, #line_text)
 
 			if col < end_col then
-				local ok, err = pcall(vim.api.nvim_buf_set_extmark, State.buf, State.ns_id, hl.line, col, {
+				pcall(vim.api.nvim_buf_set_extmark, State.buf, State.ns_id, hl.line, col, {
 					end_col = end_col,
 					hl_group = hl.hl_group,
 					priority = hl.priority or 100,
 					strict = false,
 				})
-
-				if not ok then
-					-- Silently ignore highlight errors but log for debugging
-					vim.schedule(function()
-						vim.notify(
-							string.format("Highlight error at line %d, col %d: %s", hl.line, col, tostring(err)),
-							vim.log.levels.DEBUG
-						)
-					end)
-				end
 			end
 		end
 	end
 end
 
 function M.update_window_size(line_count)
-	local max_height = config.window.max_height or 15
-	local target_height = math.min(line_count, max_height)
-	target_height = math.max(1, target_height)
-
-	if State.win and vim.api.nvim_win_is_valid(State.win) then
-		local current_height = vim.api.nvim_win_get_height(State.win)
-
-		if target_height ~= current_height then
-			pcall(vim.api.nvim_win_set_height, State.win, target_height)
-
-			-- Reposition window if pinned to bottom
-			if config.window.position == "bottom" then
-				local ui_height = vim.o.lines
-				local new_row = ui_height - target_height - 2
-				local win_config = vim.api.nvim_win_get_config(State.win)
-				win_config.row = new_row
-				pcall(vim.api.nvim_win_set_config, State.win, win_config)
-			end
-		end
-	end
-end
-
-function M:update_cursor(prompt_width)
 	if not State.win or not vim.api.nvim_win_is_valid(State.win) then
 		return
 	end
 
-	-- Calculate cursor column
-	local cursor_col = prompt_width + State.cursor_pos - 1
+	local max_height = config.window.max_height or 15
+	local target_height = math.min(line_count, max_height)
+	target_height = math.max(1, target_height)
+
+	local current_height = vim.api.nvim_win_get_height(State.win)
+	if target_height ~= current_height then
+		pcall(vim.api.nvim_win_set_height, State.win, target_height)
+
+		if config.window.position == "bottom" then
+			local ui_height = vim.o.lines
+			local new_row = ui_height - target_height - 2
+			local win_config = vim.api.nvim_win_get_config(State.win)
+			win_config.row = new_row
+			pcall(vim.api.nvim_win_set_config, State.win, win_config)
+		end
+	end
+end
+
+-- Fixed function with proper nil safety
+function M.update_cursor(prompt_width)
+	if not prompt_width or prompt_width < 0 then
+		return
+	end
+	if not State.win or not vim.api.nvim_win_is_valid(State.win) then
+		return
+	end
+
+	local cursor_col = prompt_width + (State.cursor_pos or 1) - 1
 	cursor_col = math.max(0, cursor_col)
 
 	local ok, err = pcall(vim.api.nvim_win_set_cursor, State.win, { 1, cursor_col })
@@ -506,7 +485,6 @@ function M:destroy()
 	State.buf = nil
 end
 
--- Utility function to refresh highlights (can be called after colorscheme change)
 function M.refresh_highlights()
 	M.setup_highlights()
 	M.cache_icons()
