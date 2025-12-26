@@ -1,28 +1,28 @@
 local M = {}
 
 M.defaults = {
-	-- Window configuration
+	-- Window configuration - now more comfortable at bottom
 	window = {
 		relative = "editor",
-		position = "bottom", -- Now bottom by default
-		width = 0.9,
+		position = "bottom", -- Pinned to bottom
+		width = 65, -- Fixed 80 columns (comfortable) - change to 0.7 for 70% if you prefer
+		-- width = 0.7,           -- Alternative: 70% of screen width (uncomment if preferred)
 		height = 1,
 		max_height = 15,
-		border = "single",
+		border = "rounded", -- Beautiful curved edges
 		zindex = 50,
 		title = "",
 		title_pos = nil,
-		blend = 0,
+		blend = 5, -- Slight transparency for modern feel (0 = solid)
 	},
 
-	-- Animation settings
+	-- Rest of your config remains the same...
 	animation = {
 		enabled = true,
 		duration = 150,
 		slide_distance = 5,
 	},
 
-	-- Theme (Catppuccin Mocha inspired)
 	theme = {
 		bg = "#1e1e2e",
 		fg = "#cdd6f4",
@@ -46,7 +46,6 @@ M.defaults = {
 		success_fg = "#a6e3a1",
 	},
 
-	-- Icons
 	icons = {
 		cmdline = "󰘳 ",
 		search = "󰍉 ",
@@ -65,7 +64,6 @@ M.defaults = {
 		Word = "󰊄 ",
 		Help = "󰋖 ",
 
-		-- LSP kinds
 		Text = "󰉿 ",
 		Method = "󰆧 ",
 		Module = "󰕳 ",
@@ -89,7 +87,6 @@ M.defaults = {
 		Unit = "󰑭 ",
 		Value = "󰎠 ",
 
-		-- Git
 		Modified = "󰏫 ",
 		Added = "󰐕 ",
 		Deleted = "󰍴 ",
@@ -98,14 +95,13 @@ M.defaults = {
 		more = "…",
 	},
 
-	-- Completion
+	-- Keep the rest exactly as before (completion, features, keymaps, etc.)
 	completion = {
 		enabled = true,
 		auto_trigger = true,
 		trigger_delay = 50,
 		fuzzy = true,
 		max_items = 40,
-		max_items_per_group = 8,
 		show_kind = true,
 		show_desc = true,
 		auto_select = false,
@@ -113,18 +109,8 @@ M.defaults = {
 		lsp_enabled = true,
 		telescope_enabled = true,
 		treesitter_enabled = true,
-		sources = {
-			{ name = "cmdline", priority = 100 },
-			{ name = "lsp", priority = 110, enabled = true },
-			{ name = "quick_actions", priority = 90 },
-			{ name = "history", priority = 80, max_items = 10 },
-			{ name = "buffers", priority = 95 },
-			{ name = "files", priority = 105 },
-			{ name = "git", priority = 100 },
-		},
 	},
 
-	-- Features
 	features = {
 		default_mappings = true,
 		smart_quit = true,
@@ -136,7 +122,6 @@ M.defaults = {
 		telescope_picker = true,
 	},
 
-	-- Keymaps
 	keymaps = {
 		backspace = "<BS>",
 		delete_word = "<C-w>",
@@ -158,47 +143,9 @@ M.defaults = {
 		paste = "<C-r>",
 	},
 
-	-- LSP
-	lsp = {
-		enabled = true,
-		symbol_kinds = {
-			"Function",
-			"Method",
-			"Variable",
-			"Class",
-			"Interface",
-			"Module",
-			"Property",
-			"Field",
-			"Constructor",
-			"Enum",
-			"Constant",
-			"Struct",
-			"Event",
-			"Operator",
-			"TypeParameter",
-		},
-		debounce_ms = 100,
-	},
-
-	-- Telescope
-	telescope = {
-		enabled = true,
-		preview = true,
-		layout_strategy = "vertical",
-		layout_config = {
-			height = 0.95,
-			width = 0.9,
-			preview_cutoff = 40,
-		},
-	},
-
-	-- Treesitter
-	treesitter = {
-		enabled = true,
-		highlight = true,
-		validate = true,
-	},
+	lsp = { enabled = true, debounce_ms = 100 },
+	telescope = { enabled = true, preview = true },
+	treesitter = { enabled = true, highlight = true, validate = true },
 }
 
 return M

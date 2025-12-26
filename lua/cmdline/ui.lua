@@ -1,4 +1,3 @@
--- Modified ui.lua (dynamic height and bottom re-alignment)
 local M = {}
 local State = require("cmdline.state")
 local config
@@ -23,7 +22,6 @@ end
 function M.setup_highlights()
 	local t = config.theme
 
-	-- Create all highlight groups
 	vim.api.nvim_set_hl(0, "CmdlineNormal", { bg = t.bg, fg = t.fg })
 	vim.api.nvim_set_hl(0, "CmdlineBorder", { fg = t.border_fg, bg = t.border_bg })
 	vim.api.nvim_set_hl(0, "CmdlinePrompt", { bg = t.prompt_bg, fg = t.prompt_fg, bold = true })
@@ -53,26 +51,24 @@ function M.calculate_layout()
 	local ui_width = vim.o.columns
 	local ui_height = vim.o.lines
 
-	local width = type(config.window.width) == "number"
-			and config.window.width < 1
-			and math.floor(ui_width * config.window.width)
-		or config.window.width
-	width = math.max(20, math.min(width, ui_width - 4))
+	-- Handle width (percentage or fixed)
+	local width = config.window.width
+	if type(width) == "number" and width < 1 then
+		width = math.floor(ui_width * width)
+	end
+	width = math.max(40, math.min(width, ui_width - 4)) -- Clamp to reasonable size
 
 	local height = config.window.height
 
 	local row, col
 	if config.window.position == "top" then
 		row = 1
-		col = math.floor((ui_width - width) / 2)
 	elseif config.window.position == "bottom" then
 		row = ui_height - height - 2
-		col = math.floor((ui_width - width) / 2)
 	else
-		-- center
 		row = math.floor((ui_height - height) / 2)
-		col = math.floor((ui_width - width) / 2)
 	end
+	col = math.floor((ui_width - width) / 2)
 
 	return {
 		relative = config.window.relative,
@@ -93,21 +89,19 @@ end
 function M:create()
 	local layout = M.calculate_layout()
 
-	-- Create buffer
 	State.buf = vim.api.nvim_create_buf(false, true)
 	if not State.buf then
 		return false
 	end
 
-	-- Create window
 	State.win = vim.api.nvim_open_win(State.buf, true, layout)
 	if not State.win then
 		return false
 	end
 
-	-- Set window options
+	-- Window options
 	vim.wo[State.win].winhighlight = "Normal:CmdlineNormal,FloatBorder:CmdlineBorder"
-	vim.wo[State.win].winblend = config.window.blend
+	vim.wo[State.win].winblend = config.window.blend or 0
 	vim.wo[State.win].wrap = false
 	vim.wo[State.win].number = false
 	vim.wo[State.win].relativenumber = false
@@ -134,7 +128,7 @@ function M:render()
 	local lines = {}
 	local highlights = {}
 
-	-- Get mode icon
+	-- Mode icon
 	local icon = config.icons.cmdline
 	if State.mode == "/" then
 		icon = config.icons.search
@@ -148,27 +142,21 @@ function M:render()
 	local prompt = icon .. State.text
 	table.insert(lines, prompt)
 
-	-- Highlight prompt icon
-	table.insert(highlights, {
-		line = 0,
-		col = 0,
-		end_col = #icon,
-		hl_group = "CmdlinePromptIcon",
-	})
+	-- Icon highlight
+	table.insert(highlights, { line = 0, col = 0, end_col = #icon, hl_group = "CmdlinePromptIcon" })
 
-	-- Syntax highlighting if Tree-sitter available
+	-- Tree-sitter syntax if enabled
 	if TreeSitter and config.treesitter.highlight then
 		local hl = TreeSitter.get_highlights(State.text, State.mode)
 		for _, h in ipairs(hl) do
 			h.line = 0
 			h.col_start = h.col_start + #icon
 			h.col_end = h.col_end + #icon
-			h.hl_group = "Cmdline" .. h.group -- Prefix for cmdline-specific groups
 			table.insert(highlights, h)
 		end
 	end
 
-	-- Cursor highlight (virtual, since in insert mode)
+	-- Cursor
 	table.insert(highlights, {
 		line = 0,
 		col = #icon + State.cursor_pos - 1,
@@ -179,118 +167,93 @@ function M:render()
 
 	-- Completions
 	if #State.completions > 0 then
-		table.insert(lines, string.rep("─", vim.api.nvim_win_get_width(State.win))) -- Separator
-		table.insert(highlights, {
-			line = 1,
-			col = 0,
-			end_col = -1,
-			hl_group = "CmdlineSeparator",
-		})
+		table.insert(lines, string.rep("─", vim.api.nvim_win_get_width(State.win or 0)))
+		table.insert(highlights, { line = 1, col = 0, end_col = -1, hl_group = "CmdlineSeparator" })
 
 		local max_items = config.completion.max_items or 10
 		for i, item in ipairs(State.completions) do
 			if i > max_items then
 				break
 			end
-
 			local selected = i == State.completion_index
 			local prefix = selected and "› " or "  "
-			local kind_str = config.completion.show_kind and item.kind and string.format(" [%s]", item.kind) or ""
-			local desc_str = config.completion.show_desc and item.desc and string.format(" - %s", item.desc) or ""
+			local kind_str = config.completion.show_kind and item.kind and (" [" .. item.kind .. "]") or ""
+			local desc_str = config.completion.show_desc and item.desc and (" - " .. item.desc) or ""
 
 			local line_text = prefix .. item.text .. kind_str .. desc_str
 			table.insert(lines, line_text)
 
 			local line_idx = #lines - 1
-
-			-- Selection background
 			if selected then
-				table.insert(highlights, {
-					line = line_idx,
-					col = 0,
-					end_col = #line_text,
-					hl_group = "CmdlineSelection",
-				})
+				table.insert(
+					highlights,
+					{ line = line_idx, col = 0, end_col = #line_text, hl_group = "CmdlineSelection" }
+				)
 			end
-
-			-- Kind highlight
 			if kind_str ~= "" then
 				local start = #prefix + #item.text
-				table.insert(highlights, {
-					line = line_idx,
-					col = start,
-					end_col = start + #kind_str,
-					hl_group = "CmdlineItemKind",
-				})
+				table.insert(
+					highlights,
+					{ line = line_idx, col = start, end_col = start + #kind_str, hl_group = "CmdlineItemKind" }
+				)
 			end
-
-			-- Description highlight
 			if desc_str ~= "" then
 				local start = #prefix + #item.text + #kind_str
-				table.insert(highlights, {
-					line = line_idx,
-					col = start,
-					end_col = start + #desc_str,
-					hl_group = "CmdlineItemDesc",
+				table.insert(
+					highlights,
+					{ line = line_idx, col = start, end_col = start + #desc_str, hl_group = "CmdlineItemDesc" }
+				)
+			end
+		end
+
+		if #State.completions > max_items then
+			local more = string.format("%s %d more...", config.icons.more or "…", #State.completions - max_items)
+			table.insert(lines, more)
+			table.insert(highlights, { line = #lines - 1, col = 0, end_col = #more, hl_group = "CmdlineHint" })
+		end
+	end
+
+	-- Set lines
+	pcall(vim.api.nvim_buf_set_lines, State.buf, 0, -1, false, lines)
+
+	-- Clear & apply highlights
+	pcall(vim.api.nvim_buf_clear_namespace, State.buf, State.ns_id, 0, -1)
+	for _, hl in ipairs(highlights) do
+		if hl.line < #lines then
+			local line_text = lines[hl.line + 1] or ""
+			local col = math.max(0, math.min(hl.col or 0, #line_text))
+			local end_col = math.max(col, math.min(hl.end_col or #line_text, #line_text))
+			if col < end_col then
+				pcall(vim.api.nvim_buf_set_extmark, State.buf, State.ns_id, hl.line, col, {
+					end_col = end_col,
+					hl_group = hl.hl_group,
+					priority = hl.priority or 100,
 				})
 			end
 		end
-
-		-- More indicator
-		if #State.completions > max_items then
-			local more = string.format("%s %d more...", config.icons.more, #State.completions - max_items)
-			table.insert(lines, more)
-			table.insert(highlights, {
-				line = #lines - 1,
-				col = 0,
-				end_col = #more,
-				hl_group = "CmdlineHint",
-			})
-		end
 	end
 
-	-- Set buffer content
-	pcall(vim.api.nvim_buf_set_lines, State.buf, 0, -1, false, lines)
+	-- Safe dynamic resize + bottom pin
+	local max_h = tonumber(config.window.max_height) or 15
+	local target_height = math.min(#lines, max_h)
+	target_height = math.max(1, target_height)
 
-	-- Clear old highlights
-	pcall(vim.api.nvim_buf_clear_namespace, State.buf, State.ns_id, 0, -1)
-
-	-- Apply highlights - USE BYTE INDICES NOT DISPLAY WIDTH
-	for _, hl in ipairs(highlights) do
-		if hl.line < #lines then
-			local line_text = lines[hl.line + 1]
-			if line_text then
-				-- Clamp columns to valid byte range
-				local col = math.max(0, math.min(hl.col, #line_text))
-				local end_col = math.max(col, math.min(hl.end_col or #line_text, #line_text))
-
-				if col < end_col then
-					pcall(vim.api.nvim_buf_set_extmark, State.buf, State.ns_id, hl.line, col, {
-						end_col = end_col,
-						hl_group = hl.hl_group,
-						priority = hl.priority or 100,
-					})
-				end
-			end
-		end
-	end
-
-	-- Resize window to fit content
-	local target_height = math.min(#lines, config.window.max_height or 15)
-	target_height = math.max(1, target_height) -- Ensure at least 1 line
 	if State.win and vim.api.nvim_win_is_valid(State.win) then
 		local current_height = vim.api.nvim_win_get_height(State.win)
 		if target_height ~= current_height then
 			pcall(vim.api.nvim_win_set_height, State.win, target_height)
+
+			if config.window.position == "bottom" then
+				local ui_height = vim.o.lines
+				local new_row = ui_height - target_height - 2
+				local win_config = vim.api.nvim_win_get_config(State.win)
+				win_config.row = new_row
+				pcall(vim.api.nvim_win_set_config, State.win, win_config)
+			end
 		end
-		-- Recalculate row for bottom position after resize
-		local layout = M.calculate_layout() -- Recompute layout
-		local win_config = vim.api.nvim_win_get_config(State.win)
-		win_config.row = layout.row -- Force bottom alignment after resize
-		pcall(vim.api.nvim_win_set_config, State.win, win_config)
 	end
 
-	-- Update cursor position in window
+	-- Update cursor
 	self:update_cursor(#icon)
 
 	State.rendering = false
@@ -301,11 +264,8 @@ function M:update_cursor(offset)
 	if not State.win or not vim.api.nvim_win_is_valid(State.win) then
 		return
 	end
-
-	-- Calculate cursor position using byte length
-	local text_before_cursor = State.text:sub(1, State.cursor_pos - 1)
-	local col = offset + #text_before_cursor
-
+	local text_before = State.text:sub(1, State.cursor_pos - 1)
+	local col = offset + #text_before
 	pcall(vim.api.nvim_win_set_cursor, State.win, { 1, col })
 end
 
