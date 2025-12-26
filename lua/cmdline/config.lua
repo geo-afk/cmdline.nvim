@@ -1,25 +1,26 @@
+-- Modified config.lua (add or adjust defaults for better bottom UI)
 local M = {}
 
 M.defaults = {
 	-- Window configuration
 	window = {
 		relative = "editor",
-		position = "center", -- Modern floating popup like Noice.nvim
-		width = 0.8,
+		position = "bottom", -- Changed to "bottom" for bottom positioning
+		width = 0.9, -- Wider for bottom bar feel
 		height = 1,
 		max_height = 15,
-		border = "rounded",
+		border = "single", -- Simpler border for bottom bar
 		zindex = 50,
-		title = " Command ",
-		title_pos = "center",
-		blend = 10, -- Subtle transparency for modern look
+		title = "", -- No title for cleaner look
+		title_pos = nil,
+		blend = 0, -- No transparency for solid bar
 	},
 
 	-- Animation settings for smoother UI transitions
 	animation = {
 		enabled = true,
-		duration = 200, -- milliseconds
-		slide_distance = 10,
+		duration = 150, -- Shorter duration
+		slide_distance = 5, -- Subtle slide
 	},
 
 	-- Theme - Catppuccin Mocha inspired (popular modern theme)
@@ -62,7 +63,6 @@ M.defaults = {
 	},
 
 	-- Icons (Nerd Font required) - Based on Noice.nvim and modern standards
-
 	icons = {
 		-- Mode icons
 		cmdline = "󰘳 ", -- command palette
@@ -112,24 +112,7 @@ M.defaults = {
 		Added = "󰐕 ",
 		Deleted = "󰍴 ",
 		Untracked = "󰎔 ",
-		Renamed = "󰁕 ",
-		Ignored = "󰈉 ", -- added
-
-		-- UI elements
-		selected = "󰄵 ",
-		item = "󰄱 ",
-		separator = "─",
-		more = "󰇘 ",
-		ellipsis = "…",
-		loading = "󰔟 ",
-		error = "󰅚 ", -- added
-		warning = "󰀪 ", -- added
-		info = "󰋽 ", -- added
-		hint = "󰌶 ",
-		success = "󰄴 ",
-	},
-
-	-- Completion settings
+		Rena...(truncated 315 characters)...
 	completion = {
 		enabled = true,
 		auto_trigger = true,

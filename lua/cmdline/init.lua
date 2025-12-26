@@ -1,3 +1,4 @@
+-- Modified init.lua (enhanced animation for bottom)
 local M = {}
 
 ---Setup the cmdline plugin
@@ -74,6 +75,15 @@ function M.setup(opts)
 		end,
 	})
 
+	-- Add VimResized autocmd for re-render
+	vim.api.nvim_create_autocmd("VimResized", {
+		callback = function()
+			if State.active then
+				UI:render()
+			end
+		end,
+	})
+
 	return M
 end
 
@@ -118,6 +128,8 @@ function M.open(mode)
 		M.Animation:fade_in(M.State.win)
 		if M.config.window.position == "bottom" then
 			M.Animation:slide_in(M.State.win, "bottom")
+		else
+			M.Animation:scale_in(M.State.win) -- Fallback for other positions
 		end
 	end
 
