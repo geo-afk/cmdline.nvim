@@ -85,13 +85,6 @@ function M.setup(opts)
 		end,
 	})
 
-	vim.api.nvim_create_autocmd("InsertLeave", {
-		buffer = State.buf,
-		callback = function()
-			require("cmdline").close()
-		end,
-	})
-
 	return M
 end
 
