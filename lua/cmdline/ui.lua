@@ -147,7 +147,7 @@ function M:create()
 
 	-- Buffer options
 	local buf_opts = {
-		buftype = "prompt",
+		buftype = "nofile",
 		bufhidden = "wipe",
 		swapfile = false,
 		modifiable = true,
@@ -156,9 +156,6 @@ function M:create()
 	for opt, val in pairs(buf_opts) do
 		pcall(vim.api.nvim_set_option_value, opt, val, { buf = State.buf })
 	end
-
-	-- Set empty prompt
-	pcall(vim.fn.prompt_setprompt, State.buf, "")
 
 	return true
 end
@@ -430,8 +427,7 @@ function M.update_window_size(line_count)
 
 		if config.window.position == "bottom" then
 			local ui_height = vim.o.lines
-			-- Respect cmdheight to avoid overlapping Neovim's built-in cmdline
-			local new_row = ui_height - target_height - vim.o.cmdheight
+			local new_row = ui_height - target_height - 2
 			local win_config = vim.api.nvim_win_get_config(State.win)
 			win_config.row = new_row
 			pcall(vim.api.nvim_win_set_config, State.win, win_config)

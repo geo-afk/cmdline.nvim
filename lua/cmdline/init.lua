@@ -118,9 +118,12 @@ function M.open(mode)
 		end
 	end
 
-	-- Ensure the floating window is current and enter insert mode immediately
-	vim.api.nvim_set_current_win(M.State.win)
-	vim.cmd("startinsert")
+	vim.schedule(function()
+		if M.State.win and vim.api.nvim_win_is_valid(M.State.win) then
+			vim.api.nvim_set_current_win(M.State.win)
+			vim.cmd("startinsert")
+		end
+	end)
 end
 
 function M.close()
