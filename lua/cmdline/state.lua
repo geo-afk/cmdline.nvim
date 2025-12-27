@@ -68,22 +68,22 @@ function M:reset()
 end
 
 ---Push current state to undo stack
--- function M:push_undo()
--- 	table.insert(self.undo_stack, {
--- 		text = self.text,
--- 		cursor_pos = self.cursor_pos,
--- 	})
---
--- 	-- Limit undo stack size
--- 	if #self.undo_stack > self.max_undo then
--- 		table.remove(self.undo_stack, 1)
--- 	end
---
--- 	-- Clear redo stack on new change
--- 	self.redo_stack = {}
--- end
+function M:push_undo()
+	table.insert(self.undo_stack, {
+		text = self.text,
+		cursor_pos = self.cursor_pos,
+	})
 
-local function M:push_undo_grouped()
+	-- Limit undo stack size
+	if #self.undo_stack > self.max_undo then
+		table.remove(self.undo_stack, 1)
+	end
+
+	-- Clear redo stack on new change
+	self.redo_stack = {}
+end
+
+local function push_undo_grouped()
 	local now = vim.loop.hrtime()
 	if now - (State.last_undo_time or 0) > 300000000 then
 		State:push_undo()
