@@ -480,7 +480,14 @@ function M.apply_completion(text)
 
 	-- Update UI
 	local UI = require("cmdline.ui")
-	UI:render()
+
+	if not State.render_scheduled then
+		State.render_scheduled = true
+		vim.schedule(function()
+			State.render_scheduled = false
+			UI:render()
+		end)
+	end
 
 	-- Trigger new completions
 	local Completion = require("cmdline.completion")

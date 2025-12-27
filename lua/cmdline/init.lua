@@ -74,8 +74,21 @@ function M.setup(opts)
 	vim.api.nvim_create_autocmd("VimResized", {
 		callback = function()
 			if M.State.active then
-				M.UI:render()
+				if not State.render_scheduled then
+					State.render_scheduled = true
+					vim.schedule(function()
+						State.render_scheduled = false
+						UI:render()
+					end)
+				end
 			end
+		end,
+	})
+
+	vim.api.nvim_create_autocmd("InsertLeave", {
+		buffer = State.buf,
+		callback = function()
+			require("cmdline").close()
 		end,
 	})
 

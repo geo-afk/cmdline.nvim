@@ -93,7 +93,21 @@ function M:clear()
 	State:set_completions({})
 	completion_cache = {}
 	last_completion_text = ""
-	UI:render()
+
+	if not State.render_scheduled then
+		State.render_scheduled = true
+		vim.schedule(function()
+			State.render_scheduled = false
+
+			if not State.render_scheduled then
+				State.render_scheduled = true
+				vim.schedule(function()
+					State.render_scheduled = false
+					UI:render()
+				end)
+			end
+		end)
+	end
 end
 
 ---Get completions based on current state
@@ -313,7 +327,14 @@ end
 function M:finalize_completions(items)
 	if not items or #items == 0 then
 		State:set_completions({})
-		UI:render()
+
+		if not State.render_scheduled then
+			State.render_scheduled = true
+			vim.schedule(function()
+				State.render_scheduled = false
+				UI:render()
+			end)
+		end
 		return
 	end
 
@@ -362,7 +383,13 @@ function M:finalize_completions(items)
 	-- Defer render to avoid blocking
 	vim.schedule(function()
 		if State.active then
-			UI:render()
+			if not State.render_scheduled then
+				State.render_scheduled = true
+				vim.schedule(function()
+					State.render_scheduled = false
+					UI:render()
+				end)
+			end
 		end
 	end)
 end

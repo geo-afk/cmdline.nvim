@@ -189,6 +189,17 @@ function M:render()
 		local prompt_line = prompt_prefix .. (State.text or "")
 		table.insert(lines, prompt_line)
 
+		if State.ghost_text then
+			table.insert(highlights, {
+				line = 0,
+				col = prompt_width + utf8_len(State.text),
+				end_col = prompt_width + utf8_len(State.text) + utf8_len(State.ghost_text),
+				hl_group = "CmdlineHint",
+				priority = 50,
+			})
+			lines[1] = lines[1] .. State.ghost_text
+		end
+
 		-- Highlight icon
 		table.insert(highlights, {
 			line = 0,

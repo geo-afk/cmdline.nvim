@@ -18,10 +18,17 @@ end
 -- Utilities
 ------------------------------------------------------------
 
-local function clamp_cursor()
-	State.cursor_pos = math.max(1, math.min(State.cursor_pos, #State.text + 1))
+local function utf8_len(s)
+	return vim.str_utfindex(s)
 end
 
+local function utf8_sub(s, start, finish)
+	return vim.fn.strcharpart(s, start - 1, (finish or utf8_len(s)) - start + 1)
+end
+
+local function clamp_cursor()
+	State.cursor_pos = math.max(1, math.min(State.cursor_pos, utf8_len(State.text) + 1))
+end
 ------------------------------------------------------------
 -- Buffer keymaps
 ------------------------------------------------------------
@@ -75,7 +82,14 @@ function M:setup_buffer()
 	local function move(dir)
 		State:move_cursor(dir)
 		clamp_cursor()
-		UI:render()
+
+		if not State.render_scheduled then
+			State.render_scheduled = true
+			vim.schedule(function()
+				State.render_scheduled = false
+				UI:render()
+			end)
+		end
 	end
 
 	vim.keymap.set("i", km.move_left or "<Left>", function()
@@ -163,10 +177,21 @@ end
 ------------------------------------------------------------
 
 function M:handle_char(char)
-	State:push_undo()
-	State:insert_text(char)
+	State:push_undo_grouped()
+
+	local left = utf8_sub(State.text, 1, State.cursor_pos - 1)
+	local right = utf8_sub(State.text, State.cursor_pos)
+	State.text = left .. text .. right
+	State.cursor_pos = State.cursor_pos + utf8_len(text)
 	clamp_cursor()
-	UI:render()
+
+	if not State.render_scheduled then
+		State.render_scheduled = true
+		vim.schedule(function()
+			State.render_scheduled = false
+			UI:render()
+		end)
+	end
 	Completion:trigger()
 end
 
@@ -174,23 +199,37 @@ function M:handle_backspace()
 	if State.cursor_pos <= 1 then
 		return
 	end
-	State:push_undo()
+	State:push_undo_grouped()
 	State:delete_char()
 	clamp_cursor()
-	UI:render()
+
+	if not State.render_scheduled then
+		State.render_scheduled = true
+		vim.schedule(function()
+			State.render_scheduled = false
+			UI:render()
+		end)
+	end
 	Completion:trigger()
 end
 
 function M:handle_delete_word()
-	State:push_undo()
+	State:push_undo_grouped()
 	State:delete_word()
 	clamp_cursor()
-	UI:render()
+
+	if not State.render_scheduled then
+		State.render_scheduled = true
+		vim.schedule(function()
+			State.render_scheduled = false
+			UI:render()
+		end)
+	end
 	Completion:trigger()
 end
 
 function M:handle_delete_line()
-	State:push_undo()
+	State:push_undo_grouped()
 	State.text = ""
 	State.cursor_pos = 1
 	UI:render()
@@ -225,7 +264,7 @@ function M:handle_completion_select()
 		return
 	end
 
-	State:push_undo()
+	State:push_undo_grouped()
 
 	local word_start = State.text:match("()%S+$") or State.cursor_pos
 	State.text = State.text:sub(1, word_start - 1) .. item.text
@@ -246,8 +285,12 @@ function M:handle_paste()
 
 	text = text:gsub("\n", " ")
 
-	State:push_undo()
-	State:insert_text(text)
+	State:push_undo_grouped()
+
+	local left = utf8_sub(State.text, 1, State.cursor_pos - 1)
+	local right = utf8_sub(State.text, State.cursor_pos)
+	State.text = left .. text .. right
+	State.cursor_pos = State.cursor_pos + utf8_len(text)
 	clamp_cursor()
 
 	UI:render()
